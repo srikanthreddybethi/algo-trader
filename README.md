@@ -180,6 +180,7 @@ When trading through IG Group, Capital.com, or CMC Markets as spread bets:
 
 ## Documentation
 
+- [Product Requirements](docs/requirements.md) — complete product spec in plain language (1,039 lines)
 - [Architecture & Systems](docs/architecture-and-systems.md) — full technical architecture (1,016 lines)
 - [Intelligence & Self-Improvement](docs/intelligence-and-self-improvement.md) — all 32 modules detailed (1,308 lines)
 - [User Guide](docs/user-guide.md) — complete feature guide (1,402 lines)
