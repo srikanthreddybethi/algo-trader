@@ -229,4 +229,4 @@ When trading through IG Group, Capital.com, or CMC Markets as spread bets:
 
 ## License
 
-Private. All rights reserved.
+MIT License. See [LICENSE](LICENSE) for details.
