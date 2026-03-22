@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# Database
+*.db
+*.sqlite3
+
+# Data & state (regenerated at runtime)
+backend/data/
+backend/algotrader.db
+
+# Logs
+*.log
+/tmp/
+
+# Build artifacts
+*.pyc
+frontend/dist/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
