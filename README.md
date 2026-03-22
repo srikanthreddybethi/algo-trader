@@ -2,6 +2,48 @@
 
 Autonomous algorithmic trading platform built for the UK market. Supports 18 exchanges across crypto, forex, stocks, indices, and commodities — with dedicated spread betting support for tax-free trading via IG Group, Capital.com, and CMC Markets.
 
+## Screenshots
+
+### Dashboard
+Portfolio overview with intelligence status, quick actions, risk metrics, and real-time P&L.
+
+![Dashboard](docs/images/dashboard.png)
+
+### Smart Trading
+Adaptive analysis page — type any symbol and the entire UI changes based on asset class (crypto, forex, stocks, indices, commodities).
+
+![Smart Trading](docs/images/smart-trading.png)
+
+### Trading
+Manual trading with live candlestick chart, order book, and one-click buy/sell.
+
+![Trading](docs/images/trading.png)
+
+### Exchanges
+All 18 exchanges with category filters, FCA status badges, and dynamic credential forms.
+
+![Exchanges](docs/images/exchanges.png)
+
+### Auto-Trader
+Autonomous trading engine with exchange/symbol selection, paper/live toggle, and full decision log.
+
+![Auto-Trader](docs/images/auto-trader.png)
+
+### Signals & AI
+Market sentiment, Fear & Greed Index, social sentiment, news feed, and regime detection.
+
+![Signals & AI](docs/images/signals.png)
+
+### Spread Betting
+£/point calculator, margin monitor, market hours, overnight funding, and tax-free routing.
+
+![Spread Betting](docs/images/spread-betting.png)
+
+### Analytics
+Performance metrics, risk overview, daily returns, and portfolio history.
+
+![Analytics](docs/images/analytics.png)
+
 ## What It Does
 
 - **Trades autonomously** using a 10-step decision pipeline with 32 intelligence modules
