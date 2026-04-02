@@ -1367,6 +1367,261 @@ async def test_s17_optimizer():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 18: Execution Trust Layer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def test_s18_trust_layer():
+    print("\n═══ Section 18: Execution Trust Layer ═══")
+
+    # 18a. Trust score evaluate endpoint — basic validation
+    resp = await api("GET", "/api/trust-score/evaluate?symbol=BTC/USDT&direction=buy&exchange=binance",
+                     label="Trust evaluate BTC/USDT")
+    check(resp is not None and resp.get("trust_score") is not None,
+          "Trust evaluate returns trust_score",
+          "Trust evaluate missing trust_score")
+    if resp:
+        check(resp.get("grade") in ("A", "B", "C", "D", "F"),
+              f"Grade is valid: {resp.get('grade')}",
+              f"Grade invalid: {resp.get('grade')}")
+        check(resp.get("recommendation") in ("execute", "reduce_size", "wait", "reject"),
+              f"Recommendation is valid: {resp.get('recommendation')}",
+              f"Recommendation invalid: {resp.get('recommendation')}")
+        check(resp.get("size_modifier") is not None,
+              f"Has size_modifier: {resp.get('size_modifier')}",
+              "Missing size_modifier")
+        check(len(resp.get("components", {})) == 10,
+              f"Has 10 components",
+              f"Expected 10 components, got {len(resp.get('components', {}))}")
+        check(0 <= resp["trust_score"] <= 1,
+              f"Trust score 0-1: {resp['trust_score']}",
+              f"Trust score out of range: {resp['trust_score']}")
+        check(bool(resp.get("reasoning")),
+              f"Has reasoning: {resp['reasoning'][:60]}",
+              "Missing reasoning text")
+        check(resp.get("symbol") == "BTC/USDT",
+              "Response echoes symbol",
+              f"Wrong symbol: {resp.get('symbol')}")
+        check(resp.get("exchange") == "binance",
+              "Response echoes exchange",
+              f"Wrong exchange: {resp.get('exchange')}")
+        check(resp.get("direction") == "buy",
+              "Response echoes direction",
+              f"Wrong direction: {resp.get('direction')}")
+        check(resp.get("asset_class") is not None,
+              f"Has asset_class: {resp.get('asset_class')}",
+              "Missing asset_class")
+        check(resp.get("timestamp") is not None,
+              "Has timestamp",
+              "Missing timestamp")
+
+    # 18b. Component scores are all 0-1
+    if resp:
+        all_valid = True
+        for comp_name, comp_val in resp.get("components", {}).items():
+            if not (0 <= comp_val <= 1):
+                all_valid = False
+        check(all_valid,
+              "All 10 component scores are in [0, 1]",
+              "Some component scores out of range")
+
+    # 18c. Weights used should sum to ~1.0
+    if resp:
+        weights = resp.get("weights_used", {})
+        total_w = sum(weights.values())
+        check(0.99 <= total_w <= 1.01,
+              f"Weights sum to ~1.0: {total_w:.4f}",
+              f"Weights don't sum to 1.0: {total_w:.4f}")
+
+    # 18d. Weights endpoint for all asset classes
+    for ac in ["crypto", "forex", "stocks", "indices", "commodities", "spread_betting"]:
+        w = await api("GET", f"/api/trust-score/weights/{ac}",
+                      label=f"Weights {ac}")
+        if w:
+            w_data = w.get("weights", w)
+            total = sum(w_data.values()) if isinstance(w_data, dict) else 0
+            check(0.99 <= total <= 1.01,
+                  f"  {ac}: weights sum to 1.0 ({total:.4f})",
+                  f"  {ac}: weights sum to {total:.4f}")
+
+    # 18e. Unknown asset class returns default weights
+    w_unknown = await api("GET", "/api/trust-score/weights/unknown_asset",
+                          label="Weights unknown_asset")
+    if w_unknown:
+        w_data = w_unknown.get("weights", w_unknown)
+        total = sum(w_data.values()) if isinstance(w_data, dict) else 0
+        check(0.99 <= total <= 1.01,
+              f"Unknown asset class gets default weights (sum={total:.4f})",
+              f"Unknown asset class weights broken (sum={total:.4f})")
+
+    # 18f. Different assets get different trust evaluations
+    crypto_eval = await api("GET", "/api/trust-score/evaluate?symbol=BTC/USDT&direction=buy&exchange=binance",
+                            label="Trust eval crypto")
+    forex_eval = await api("GET", "/api/trust-score/evaluate?symbol=EUR/USD&direction=buy&exchange=oanda",
+                           label="Trust eval forex")
+    stock_eval = await api("GET", "/api/trust-score/evaluate?symbol=AAPL&direction=buy&exchange=alpaca",
+                           label="Trust eval stock")
+    if crypto_eval and forex_eval:
+        diff = (
+            crypto_eval["trust_score"] != forex_eval["trust_score"] or
+            crypto_eval["components"] != forex_eval["components"]
+        )
+        check(diff,
+              "Crypto and forex get different trust evaluations",
+              "Crypto and forex returned identical evaluations")
+    if crypto_eval and stock_eval:
+        diff2 = (
+            crypto_eval["weights_used"] != stock_eval["weights_used"]
+        )
+        check(diff2,
+              "Crypto and stocks use different weight profiles",
+              "Crypto and stocks use same weight profile")
+
+    # 18g. Spread bet exchange triggers spread_betting weight profile
+    sb_eval = await api("GET", "/api/trust-score/evaluate?symbol=FTSE100&direction=buy&exchange=ig",
+                        label="Trust eval SB (ig)")
+    if sb_eval:
+        sb_weights = sb_eval.get("weights_used", {})
+        check(sb_weights.get("spread_quality", 0) >= 0.10,
+              f"SB spread_quality weight is high: {sb_weights.get('spread_quality')}",
+              f"SB spread_quality weight too low: {sb_weights.get('spread_quality')}")
+        check(sb_weights.get("venue_quality", 0) >= 0.06,
+              f"SB venue_quality elevated: {sb_weights.get('venue_quality')}",
+              f"SB venue_quality not elevated: {sb_weights.get('venue_quality')}")
+
+    # 18h. Analytics endpoint
+    analytics = await api("GET", "/api/trust-score/analytics",
+                          label="Trust analytics")
+    if analytics:
+        check("history_stats" in analytics,
+              "Analytics has history_stats",
+              "Analytics missing history_stats")
+        check("outcome_correlation" in analytics,
+              "Analytics has outcome_correlation",
+              "Analytics missing outcome_correlation")
+        check("venue_scores" in analytics,
+              "Analytics has venue_scores",
+              "Analytics missing venue_scores")
+        check("recent_evaluations" in analytics,
+              "Analytics has recent_evaluations",
+              "Analytics missing recent_evaluations")
+        stats = analytics.get("history_stats", {})
+        check(stats.get("total_evaluations", 0) > 0,
+              f"History recorded {stats.get('total_evaluations')} evaluations",
+              "No evaluations in history")
+
+    # 18i. Venues endpoint
+    venues = await api("GET", "/api/trust-score/venues",
+                       label="Trust venues")
+    check(isinstance(venues, dict),
+          f"Venues returns dict (keys: {list(venues.keys()) if isinstance(venues, dict) else 'N/A'})",
+          f"Venues unexpected type: {type(venues)}")
+
+    # 18j. History endpoint
+    history = await api("GET", "/api/trust-score/history?limit=10",
+                        label="Trust history")
+    check(isinstance(history, list),
+          f"History returns list ({len(history)} entries)",
+          f"History unexpected type: {type(history)}")
+    if history and len(history) > 0:
+        entry = history[-1]
+        check("trust_score" in entry,
+              "History entry has trust_score",
+              "History entry missing trust_score")
+        check("grade" in entry,
+              "History entry has grade",
+              "History entry missing grade")
+        check("components" in entry,
+              "History entry has components",
+              "History entry missing components")
+
+    # 18k. Trust score appears in auto-trader decisions after running cycles
+    await api("POST", "/api/portfolio/reset?balance=25000",
+              label="Reset portfolio for trust test")
+    await api("DELETE", "/api/auto-trader/decisions",
+              label="Clear decisions for trust test")
+    await api("POST", "/api/auto-trader/config", {
+        "symbols": ["BTC/USDT", "ETH/USDT"], "exchange": "binance",
+        "max_position_pct": 20, "max_positions": 5, "stop_loss_pct": 5,
+    }, label="Configure auto-trader for trust test")
+    for i in range(5):
+        await api("POST", "/api/auto-trader/run-once",
+                  label=f"Trust cycle {i+1}", timeout=120)
+    decisions = await api("GET", "/api/auto-trader/decisions?limit=100",
+                          label="Get decisions for trust test")
+    if isinstance(decisions, list):
+        trust_types = {"trust_score", "trust_rejected", "trust_wait"}
+        trust_decisions = [d for d in decisions if d.get("type") in trust_types]
+        trade_decisions = [d for d in decisions if d.get("type") in ("trade_executed", "strategy_sell_exit")]
+        non_trivial = [d for d in decisions if d.get("type") not in ("cycle_complete", "config_update")]
+        # Trust decisions appear only when the pipeline passes intelligence checks
+        # and reaches the trust evaluation step. With simulated trending data,
+        # this should happen at least once in 5 cycles with 2 symbols.
+        if trade_decisions:
+            # If trades executed, trust_score must have preceded them
+            check(len(trust_decisions) > 0,
+                  f"Trades fired → trust_score decisions present: {len(trust_decisions)}",
+                  f"Trades fired but NO trust decisions (types: {set(d.get('type') for d in decisions)})")
+        else:
+            # If no trades, pipeline may have been blocked earlier (no_signal, etc.)
+            # Just verify the cycle ran and trust is available via API
+            check(len(non_trivial) > 0,
+                  f"No trades but pipeline ran ({len(non_trivial)} non-trivial decisions)",
+                  "Pipeline produced no decisions at all")
+
+        if trust_decisions:
+            td = trust_decisions[0]
+            check("trust_score" in td,
+                  f"Trust decision has trust_score: {td.get('trust_score')}",
+                  "Trust decision missing trust_score")
+            check("grade" in td,
+                  f"Trust decision has grade: {td.get('grade')}",
+                  "Trust decision missing grade")
+            check("components" in td,
+                  "Trust decision has components",
+                  "Trust decision missing components")
+            check("reasoning" in td,
+                  "Trust decision has reasoning",
+                  "Trust decision missing reasoning")
+            check("size_modifier" in td,
+                  f"Trust decision has size_modifier: {td.get('size_modifier')}",
+                  "Trust decision missing size_modifier")
+
+        # Log trust block count (informational)
+        trust_blocks = [d for d in decisions
+                        if d.get("type") in ("trust_rejected", "trust_wait")]
+        check(True,
+              f"Trust blocks/waits found: {len(trust_blocks)}",
+              "")
+
+    # 18l. Grade thresholds are consistent
+    # A ≥ 0.80, B ≥ 0.65, C ≥ 0.50, D ≥ 0.35, F < 0.35
+    if resp:
+        score = resp["trust_score"]
+        grade = resp["grade"]
+        if score >= 0.80:
+            check(grade == "A", f"Score {score} → grade A", f"Score {score} → grade {grade} (expected A)")
+        elif score >= 0.65:
+            check(grade == "B", f"Score {score} → grade B", f"Score {score} → grade {grade} (expected B)")
+        elif score >= 0.50:
+            check(grade == "C", f"Score {score} → grade C", f"Score {score} → grade {grade} (expected C)")
+        elif score >= 0.35:
+            check(grade == "D", f"Score {score} → grade D", f"Score {score} → grade {grade} (expected D)")
+        else:
+            check(grade == "F", f"Score {score} → grade F", f"Score {score} → grade {grade} (expected F)")
+
+    # 18m. Size modifier is consistent with recommendation
+    if resp:
+        rec = resp["recommendation"]
+        sm = resp["size_modifier"]
+        if rec == "execute":
+            check(sm >= 0.7, f"Execute → size_modifier ≥ 0.7: {sm}", f"Execute but size_modifier={sm}")
+        elif rec == "reduce_size":
+            check(0 < sm < 1.0, f"Reduce → 0 < size_modifier < 1.0: {sm}", f"Reduce but size_modifier={sm}")
+        elif rec in ("wait", "reject"):
+            check(sm == 0.0, f"{rec} → size_modifier = 0: {sm}", f"{rec} but size_modifier={sm}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1420,6 +1675,7 @@ async def main():
         ("Section 15: Portfolio Math",         test_s15_portfolio_math),
         ("Section 16: Live Bridge",            test_s16_live_bridge),
         ("Section 17: Optimizer",              test_s17_optimizer),
+        ("Section 18: Trust Layer",             test_s18_trust_layer),
     ]
 
     section_results = []

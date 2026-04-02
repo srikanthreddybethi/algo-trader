@@ -31,6 +31,7 @@ from app.services.ai_decision_layer import assess_news_impact, advise_exit, anal
 from app.services.alerting import alert_manager
 from app.services.spread_betting import spread_bet_engine
 from app.services.asset_trading_rules import asset_router
+from app.services.execution_trust import trust_scorer
 
 logger = logging.getLogger(__name__)
 
@@ -868,6 +869,72 @@ class AutoTrader:
                 trade_instrument = inst_decision["instrument"]
                 trade_leverage = inst_decision["leverage"]
 
+                # ── Step 9A: Execution Trust Score ──
+                trust_eval = trust_scorer.evaluate(
+                    symbol=symbol,
+                    asset_class=asset_info.get("asset_class", "crypto"),
+                    direction=trade_direction,
+                    exchange=exchange,
+                    signal_confidence=analysis.get("confidence", 0.5),
+                    mtf_agreement=intel_check.get("mtf_agreement", 0.5),
+                    regime_confidence=regime.get("confidence", 0.5),
+                    regime_aligns_with_direction=(
+                        (trade_direction == "long" and regime.get("regime") in ("trending_up", "ranging")) or
+                        (trade_direction == "short" and regime.get("regime") in ("trending_down", "ranging"))
+                    ),
+                    sentiment_score=signals_data.get("universal_sentiment", {}).get("sentiment_score", 0),
+                    sentiment_aligns=(
+                        (trade_direction == "long" and signals_data.get("universal_sentiment", {}).get("sentiment_score", 0) >= 0) or
+                        (trade_direction == "short" and signals_data.get("universal_sentiment", {}).get("sentiment_score", 0) <= 0)
+                    ),
+                    strategy_win_rate=intel_check.get("strategy_score", {}).get("win_rate", 0.5),
+                    strategy_trades_count=intel_check.get("strategy_score", {}).get("total_trades", 0),
+                    current_spread_vs_avg=1.0,
+                    data_age_seconds=0,
+                    news_risk=signals_data.get("news_risk_level", "none"),
+                    portfolio_drawdown_pct=abs(risk_check.get("drawdown_pct", 0)),
+                    max_drawdown_pct=self.risk_manager.max_drawdown_pct,
+                    is_spread_bet=(exchange in SB_EXCHANGES),
+                )
+
+                log_decision({
+                    "type": "trust_score",
+                    "symbol": symbol,
+                    "trust_score": trust_eval["trust_score"],
+                    "grade": trust_eval["grade"],
+                    "recommendation": trust_eval["recommendation"],
+                    "size_modifier": trust_eval["size_modifier"],
+                    "components": trust_eval["components"],
+                    "reasoning": trust_eval["reasoning"],
+                    "cycle": self._cycle_count,
+                })
+
+                # Apply trust score decision
+                if trust_eval["recommendation"] == "reject":
+                    log_decision({
+                        "type": "trust_rejected",
+                        "symbol": symbol,
+                        "trust_score": trust_eval["trust_score"],
+                        "grade": trust_eval["grade"],
+                        "reasoning": trust_eval["reasoning"],
+                        "cycle": self._cycle_count,
+                    })
+                    continue
+
+                if trust_eval["recommendation"] == "wait":
+                    log_decision({
+                        "type": "trust_wait",
+                        "symbol": symbol,
+                        "trust_score": trust_eval["trust_score"],
+                        "grade": trust_eval["grade"],
+                        "reasoning": trust_eval["reasoning"],
+                        "cycle": self._cycle_count,
+                    })
+                    continue
+
+                # Trust-based position size modifier
+                trust_size_mult = trust_eval["size_modifier"]
+
                 # Step 9: Calculate position size (fee-aware)
                 from app.services.paper_trading import estimate_round_trip_cost, FEE_RATES, MIN_ORDER_USD, get_fee_stats
 
@@ -883,7 +950,7 @@ class AutoTrader:
                 raw_position_value = portfolio.cash_balance * (position_pct / 100)
                 # Apply losing streak + time-of-day + asset validation reductions
                 asset_size_mult = asset_validation.get("size_multiplier", 1.0)
-                raw_position_value *= streak_size_mult * time_size_mult * asset_size_mult
+                raw_position_value *= streak_size_mult * time_size_mult * asset_size_mult * trust_size_mult
                 # Clamp to asset-specific max position pct
                 asset_max_pct = asset_risk.get("max_position_pct", self.config.get("max_position_pct", 20))
                 max_asset_value = portfolio.cash_balance * (asset_max_pct / 100)
@@ -985,6 +1052,15 @@ class AutoTrader:
                             "strategy_name": strategy_name,
                         })
 
+                        # Record successful execution with venue tracker
+                        trust_scorer.venue_tracker.record_execution(
+                            exchange=exchange,
+                            success=True,
+                            slippage_pct=0.05,
+                            latency_ms=0,
+                            fill_rate=1.0,
+                        )
+
                         # FEEDBACK LOOP: On sell, feed outcome to ALL learning systems
                         if side == "sell" and entry_price_for_pnl and entry_price_for_pnl > 0:
                             raw_pnl = (current_price - entry_price_for_pnl) * quantity
@@ -1011,7 +1087,10 @@ class AutoTrader:
                             )
                             adaptive.time_profile.record_trade(net_pnl, won)
                             adaptive.frequency.record_trade()
-                            # 4. Persist learning state to disk
+                            # 4. Update trust score history with actual outcome
+                            pnl_pct = ((current_price - entry_price_for_pnl) / entry_price_for_pnl) * 100
+                            trust_scorer.history.update_outcome(symbol, pnl_pct)
+                            # 5. Persist learning state to disk
                             persistence.save_memory(intelligence.memory._memories)
                             persistence.save_scoreboard(dict(intelligence.scoreboard._outcomes))
                             persistence.save_streak(losing_streak._recent_outcomes)
@@ -1039,6 +1118,13 @@ class AutoTrader:
                             "inst_reasoning": inst_decision["reasoning"],
                         })
                     except Exception as e:
+                        trust_scorer.venue_tracker.record_execution(
+                            exchange=exchange,
+                            success=False,
+                            slippage_pct=0,
+                            latency_ms=0,
+                            fill_rate=0,
+                        )
                         log_decision({
                             "type": "trade_failed",
                             "symbol": symbol,

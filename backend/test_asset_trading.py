@@ -1183,6 +1183,237 @@ async def test_regime_strategies():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TRUST SCORE PER ASSET TYPE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def test_trust_per_asset():
+    print("\n═══ TRUST SCORE PER ASSET TYPE ═══")
+    prefix = "[TRUST]"
+
+    assets_to_test = [
+        ("BTC/USDT", "binance", "crypto"),
+        ("EUR/USD", "oanda", "forex"),
+        ("AAPL", "alpaca", "stocks"),
+        ("FTSE100", "ig", "indices"),
+        ("XAUUSD", "capital", "spread_betting"),  # Capital.com is SB exchange, so SB weights apply
+        ("GBP/USD", "ig", "spread_betting"),
+    ]
+
+    # ── Per-asset evaluation ──
+
+    trust_results = {}
+    for symbol, exchange, expected_profile in assets_to_test:
+        resp = await api("GET",
+                         f"/api/trust-score/evaluate?symbol={symbol}&direction=buy&exchange={exchange}",
+                         label=f"{prefix} Evaluate {symbol}/{exchange}")
+
+        if not resp:
+            check(False, "", f"{prefix} [{expected_profile}] {symbol}: evaluate returned None")
+            continue
+
+        trust_results[expected_profile] = resp
+
+        # Basic validation
+        check(resp.get("trust_score") is not None,
+              f"{prefix} [{expected_profile}] {symbol}: has trust_score={resp.get('trust_score')}",
+              f"{prefix} [{expected_profile}] {symbol}: missing trust_score")
+        check(0 <= resp.get("trust_score", -1) <= 1,
+              f"{prefix} [{expected_profile}] {symbol}: score in [0,1]",
+              f"{prefix} [{expected_profile}] {symbol}: score out of range: {resp.get('trust_score')}")
+        check(resp.get("grade") in ("A", "B", "C", "D", "F"),
+              f"{prefix} [{expected_profile}] {symbol}: grade={resp.get('grade')}",
+              f"{prefix} [{expected_profile}] {symbol}: invalid grade={resp.get('grade')}")
+        check(resp.get("recommendation") in ("execute", "reduce_size", "wait", "reject"),
+              f"{prefix} [{expected_profile}] {symbol}: rec={resp.get('recommendation')}",
+              f"{prefix} [{expected_profile}] {symbol}: invalid rec={resp.get('recommendation')}")
+        check(len(resp.get("components", {})) == 10,
+              f"{prefix} [{expected_profile}] {symbol}: 10 components",
+              f"{prefix} [{expected_profile}] {symbol}: {len(resp.get('components', {}))} components")
+        check(resp.get("size_modifier") is not None,
+              f"{prefix} [{expected_profile}] {symbol}: has size_modifier",
+              f"{prefix} [{expected_profile}] {symbol}: missing size_modifier")
+        check(bool(resp.get("reasoning")),
+              f"{prefix} [{expected_profile}] {symbol}: has reasoning",
+              f"{prefix} [{expected_profile}] {symbol}: missing reasoning")
+        check(resp.get("symbol") == symbol,
+              f"{prefix} [{expected_profile}] echoes symbol",
+              f"{prefix} [{expected_profile}] wrong symbol: {resp.get('symbol')}")
+        check(resp.get("exchange") == exchange,
+              f"{prefix} [{expected_profile}] echoes exchange",
+              f"{prefix} [{expected_profile}] wrong exchange: {resp.get('exchange')}")
+
+        # All component scores must be 0-1
+        comps = resp.get("components", {})
+        all_valid = all(0 <= v <= 1 for v in comps.values())
+        check(all_valid,
+              f"{prefix} [{expected_profile}] all components in [0,1]",
+              f"{prefix} [{expected_profile}] components out of range: {comps}")
+
+        # Weights used must sum to ~1.0
+        weights = resp.get("weights_used", {})
+        total_w = sum(weights.values())
+        check(0.99 <= total_w <= 1.01,
+              f"{prefix} [{expected_profile}] weights sum to 1.0 ({total_w:.4f})",
+              f"{prefix} [{expected_profile}] weights sum to {total_w:.4f}")
+
+        # Verify asset-specific weight emphasis
+        if expected_profile == "crypto":
+            check(weights.get("sentiment_alignment", 0) >= 0.12,
+                  f"{prefix} Crypto: sentiment weight high ({weights.get('sentiment_alignment')})",
+                  f"{prefix} Crypto: sentiment weight low ({weights.get('sentiment_alignment')})")
+            check(weights.get("news_safety", 0) >= 0.08,
+                  f"{prefix} Crypto: news weight high ({weights.get('news_safety')})",
+                  f"{prefix} Crypto: news weight low ({weights.get('news_safety')})")
+        elif expected_profile == "forex":
+            check(weights.get("timeframe_agreement", 0) >= 0.12,
+                  f"{prefix} Forex: MTF weight high ({weights.get('timeframe_agreement')})",
+                  f"{prefix} Forex: MTF weight low ({weights.get('timeframe_agreement')})")
+            check(weights.get("spread_quality", 0) >= 0.08,
+                  f"{prefix} Forex: spread weight high ({weights.get('spread_quality')})",
+                  f"{prefix} Forex: spread weight low ({weights.get('spread_quality')})")
+        elif expected_profile == "stocks":
+            check(weights.get("risk_headroom", 0) >= 0.12,
+                  f"{prefix} Stocks: risk_headroom high ({weights.get('risk_headroom')})",
+                  f"{prefix} Stocks: risk_headroom low ({weights.get('risk_headroom')})")
+            check(weights.get("strategy_track_record", 0) >= 0.12,
+                  f"{prefix} Stocks: track_record high ({weights.get('strategy_track_record')})",
+                  f"{prefix} Stocks: track_record low ({weights.get('strategy_track_record')})")
+        elif expected_profile == "indices":
+            check(weights.get("regime_confidence", 0) >= 0.12,
+                  f"{prefix} Indices: regime weight high ({weights.get('regime_confidence')})",
+                  f"{prefix} Indices: regime weight low ({weights.get('regime_confidence')})")
+        elif expected_profile == "commodities":
+            check(weights.get("sentiment_alignment", 0) >= 0.12,
+                  f"{prefix} Commodities: sentiment weight high ({weights.get('sentiment_alignment')})",
+                  f"{prefix} Commodities: sentiment weight low ({weights.get('sentiment_alignment')})")
+            check(weights.get("news_safety", 0) >= 0.10,
+                  f"{prefix} Commodities: news weight high ({weights.get('news_safety')})",
+                  f"{prefix} Commodities: news weight low ({weights.get('news_safety')})")
+        elif expected_profile == "spread_betting":
+            check(weights.get("spread_quality", 0) >= 0.10,
+                  f"{prefix} SB: spread_quality high ({weights.get('spread_quality')})",
+                  f"{prefix} SB: spread_quality low ({weights.get('spread_quality')})")
+            check(weights.get("venue_quality", 0) >= 0.06,
+                  f"{prefix} SB: venue_quality elevated ({weights.get('venue_quality')})",
+                  f"{prefix} SB: venue_quality low ({weights.get('venue_quality')})")
+
+    # ── Cross-asset score comparison ──
+
+    scores = {k: v["trust_score"] for k, v in trust_results.items()}
+    if len(scores) >= 3:
+        unique_scores = len(set(f"{v:.3f}" for v in scores.values()))
+        check(unique_scores > 1,
+              f"{prefix} [CROSS] {unique_scores} distinct trust scores across asset types",
+              f"{prefix} [CROSS] All assets got same trust score")
+
+    # Different weight profiles for different assets
+    weight_profiles = {k: tuple(sorted(v.get("weights_used", {}).items()))
+                       for k, v in trust_results.items()}
+    if len(weight_profiles) >= 3:
+        unique_profiles = len(set(weight_profiles.values()))
+        check(unique_profiles >= 3,
+              f"{prefix} [CROSS] {unique_profiles} distinct weight profiles",
+              f"{prefix} [CROSS] Too few unique weight profiles: {unique_profiles}")
+
+    # SB exchanges should use spread_betting profile
+    for key in ["indices", "spread_betting"]:
+        if key in trust_results:
+            w = trust_results[key].get("weights_used", {})
+            check(w.get("spread_quality", 0) >= 0.10,
+                  f"{prefix} [CROSS] {key} uses SB-elevated spread_quality",
+                  f"{prefix} [CROSS] {key} spread_quality too low: {w.get('spread_quality')}")
+
+    # ── Weights endpoint per asset class ──
+
+    for ac in ["crypto", "forex", "stocks", "indices", "commodities", "spread_betting"]:
+        w_resp = await api("GET", f"/api/trust-score/weights/{ac}",
+                           label=f"{prefix} Weights {ac}")
+        if w_resp:
+            w_data = w_resp.get("weights", {})
+            total = sum(w_data.values())
+            check(0.99 <= total <= 1.01,
+                  f"{prefix} Weights {ac}: sum={total:.4f}",
+                  f"{prefix} Weights {ac}: sum={total:.4f} (expected ~1.0)")
+            check(len(w_data) == 10,
+                  f"{prefix} Weights {ac}: 10 dimensions",
+                  f"{prefix} Weights {ac}: {len(w_data)} dimensions")
+
+    # ── Analytics after multiple evaluations ──
+
+    analytics = await api("GET", "/api/trust-score/analytics",
+                          label=f"{prefix} Analytics")
+    if analytics:
+        stats = analytics.get("history_stats", {})
+        check(stats.get("total_evaluations", 0) >= 6,
+              f"{prefix} Analytics: {stats.get('total_evaluations')} evaluations recorded",
+              f"{prefix} Analytics: only {stats.get('total_evaluations')} evaluations")
+        check("grade_distribution" in stats,
+              f"{prefix} Analytics: has grade distribution",
+              f"{prefix} Analytics: missing grade distribution")
+        check(stats.get("avg_trust_score", 0) > 0,
+              f"{prefix} Analytics: avg_trust_score={stats.get('avg_trust_score')}",
+              f"{prefix} Analytics: avg_trust_score is 0")
+
+    # ── History ──
+
+    history = await api("GET", "/api/trust-score/history?limit=20",
+                        label=f"{prefix} History")
+    if isinstance(history, list):
+        check(len(history) >= 6,
+              f"{prefix} History has {len(history)} entries (≥6 expected)",
+              f"{prefix} History has only {len(history)} entries")
+        # Each entry should have required fields
+        if history:
+            entry = history[-1]
+            for field in ["symbol", "trust_score", "grade", "recommendation", "components", "timestamp"]:
+                check(field in entry,
+                      f"{prefix} History entry has '{field}'",
+                      f"{prefix} History entry missing '{field}'")
+
+    # ── Venues endpoint ──
+
+    venues = await api("GET", "/api/trust-score/venues",
+                       label=f"{prefix} Venues")
+    check(isinstance(venues, dict),
+          f"{prefix} Venues endpoint returns dict",
+          f"{prefix} Venues endpoint wrong type: {type(venues)}")
+
+    # ── Grade-score consistency checks ──
+
+    for name, result in trust_results.items():
+        score = result["trust_score"]
+        grade = result["grade"]
+        rec = result["recommendation"]
+        sm = result["size_modifier"]
+
+        # Grade matches score thresholds
+        expected_grade = (
+            "A" if score >= 0.80 else
+            "B" if score >= 0.65 else
+            "C" if score >= 0.50 else
+            "D" if score >= 0.35 else
+            "F"
+        )
+        check(grade == expected_grade,
+              f"{prefix} [{name}] score {score:.4f} → grade {grade}",
+              f"{prefix} [{name}] score {score:.4f} → grade {grade} (expected {expected_grade})")
+
+        # Size modifier consistency
+        if rec == "execute":
+            check(sm >= 0.7,
+                  f"{prefix} [{name}] execute → size_modifier ≥ 0.7: {sm}",
+                  f"{prefix} [{name}] execute but size_modifier={sm}")
+        elif rec == "reduce_size":
+            check(0 < sm < 1.0,
+                  f"{prefix} [{name}] reduce → 0 < size_modifier < 1: {sm}",
+                  f"{prefix} [{name}] reduce but size_modifier={sm}")
+        elif rec in ("wait", "reject"):
+            check(sm == 0.0,
+                  f"{prefix} [{name}] {rec} → size_modifier=0: {sm}",
+                  f"{prefix} [{name}] {rec} but size_modifier={sm}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1219,6 +1450,7 @@ async def main():
         ("Cross-Asset Comparison",       test_cross_asset),
         ("Specific Logic Paths",         test_specific_logic),
         ("Regime Strategy Validation",   test_regime_strategies),
+        ("Trust Score Per Asset",       test_trust_per_asset),
     ]
 
     for name, fn in sections:

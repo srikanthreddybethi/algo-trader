@@ -15,6 +15,7 @@ import {
   Bell,
   AlertTriangle,
   Crosshair,
+  ShieldCheck,
   PoundSterling,
   Settings2,
   ChevronLeft,
@@ -29,6 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/smart-trading", label: "Smart Trading", icon: Crosshair },
+  { path: "/trust-score", label: "Trust Score", icon: ShieldCheck },
   { path: "/trading", label: "Trading", icon: LineChart },
   { path: "/exchanges", label: "Exchanges", icon: Globe },
   { path: "/history", label: "Trade History", icon: History },
