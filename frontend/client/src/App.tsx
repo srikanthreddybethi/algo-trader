@@ -20,6 +20,7 @@ import SystemAlerts from "@/pages/SystemAlerts";
 import SpreadBetting from "@/pages/SpreadBetting";
 import SmartTrading from "@/pages/SmartTrading";
 import TrustScore from "@/pages/TrustScore";
+import GeoRisk from "@/pages/GeoRisk";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -29,6 +30,7 @@ function AppRouter() {
         <Route path="/" component={Dashboard} />
         <Route path="/smart-trading" component={SmartTrading} />
         <Route path="/trust-score" component={TrustScore} />
+        <Route path="/geo-risk" component={GeoRisk} />
         <Route path="/trading" component={Trading} />
         <Route path="/exchanges" component={Exchanges} />
         <Route path="/history" component={TradeHistory} />

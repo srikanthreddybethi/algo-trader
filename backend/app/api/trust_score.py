@@ -9,6 +9,7 @@ from app.services.signals.data_feeds import get_all_signals_data, get_fear_greed
 from app.services.signals.ai_engine import get_ai_analysis
 from app.services.intelligence import intelligence
 from app.exchanges.manager import exchange_manager
+from app.services.geo_risk.monitor import geo_monitor
 
 router = APIRouter(prefix="/api/trust-score", tags=["trust-score"])
 
@@ -89,20 +90,25 @@ async def evaluate_trust(
     except Exception:
         pass
 
-    # News risk level
+    # News risk level — powered by Geopolitical Risk module
     news_risk = "none"
     try:
-        news = signals_data.get("news", [])
-        if news:
-            news_risk = "low"
-            # If there's negative news, escalate
-            for n in news[:5]:
-                title = (n.get("title", "") + n.get("text", "")).lower()
-                if any(w in title for w in ("crash", "hack", "ban", "lawsuit", "fraud")):
-                    news_risk = "high"
-                    break
-                if any(w in title for w in ("warning", "risk", "concern", "drop")):
-                    news_risk = "medium"
+        # Use geo_monitor for comprehensive geo-risk-aware news assessment
+        geo_news_risk = geo_monitor.get_news_risk_level(asset_class)
+        if geo_news_risk != "none":
+            news_risk = geo_news_risk
+        else:
+            # Fallback to basic keyword scan when geo module has no data
+            news = signals_data.get("news", [])
+            if news:
+                news_risk = "low"
+                for n in news[:5]:
+                    title = (n.get("title", "") + n.get("text", "")).lower()
+                    if any(w in title for w in ("crash", "hack", "ban", "lawsuit", "fraud")):
+                        news_risk = "high"
+                        break
+                    if any(w in title for w in ("warning", "risk", "concern", "drop")):
+                        news_risk = "medium"
     except Exception:
         pass
 

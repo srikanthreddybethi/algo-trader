@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import exchanges, portfolio, trading, websocket, backtesting, alerts, analytics, signals, auto_trader, live_trading, optimizer, system_alerts, spread_betting, asset_trading, trust_score
+from app.api import exchanges, portfolio, trading, websocket, backtesting, alerts, analytics, signals, auto_trader, live_trading, optimizer, system_alerts, spread_betting, asset_trading, trust_score, geo_risk
 from app.exchanges.manager import exchange_manager
 import os
 
@@ -60,6 +60,7 @@ app.include_router(system_alerts.router)
 app.include_router(spread_betting.router)
 app.include_router(asset_trading.router)
 app.include_router(trust_score.router)
+app.include_router(geo_risk.router)
 
 
 @app.get("/api/health")
