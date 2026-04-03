@@ -21,11 +21,12 @@
 12. [Optimizer](#12-optimizer)
 13. [Alerts & System Alerts](#13-alerts--system-alerts)
 14. [Settings](#14-settings)
-15. [Trust Score](#15-trust-score)
-16. [UK Tax Information](#16-uk-tax-information)
-17. [Deployment Guide](#17-deployment-guide)
-18. [FAQ](#18-faq)
-19. [Glossary](#19-glossary)
+15. [Geo Risk](#15-geo-risk)
+16. [Trust Score](#16-trust-score)
+17. [UK Tax Information](#17-uk-tax-information)
+18. [Deployment Guide](#18-deployment-guide)
+19. [FAQ](#19-faq)
+20. [Glossary](#20-glossary)
 
 ---
 
@@ -858,7 +859,7 @@ Recommends whether to trade via spread bet or CFD based on your tax situation:
 - **Spread Bet**: Tax-free profits (no CGT, no Stamp Duty) — recommended for most UK traders
 - **CFD**: Taxable gains but losses can offset against other capital gains — useful if you have other realised losses to offset
 
-See [Section 15](#15-uk-tax-information) for full UK tax details.
+See [Section 17](#17-uk-tax-information) for full UK tax details.
 
 ### Trade Simulator
 
@@ -959,7 +960,7 @@ Comprehensive performance tracking for your portfolio.
 
 ### Intelligence Status
 
-Live snapshot of all 35 intelligence modules:
+Live snapshot of all 42 intelligence modules:
 - Current scores per strategy (StrategyScoreboard)
 - Market memory size and recent hit rate
 - AI accuracy % (last 30 predictions)
@@ -1130,7 +1131,89 @@ At the bottom of Settings:
 
 ---
 
-## 15. Trust Score
+## 15. Geo Risk
+
+**Path:** `/geo-risk` | **Icon:** Globe
+
+The Geo Risk page provides a real-time geopolitical risk intelligence dashboard. It monitors global news events, classifies them by type and region, and shows how they affect your trading across different asset classes.
+
+### Regional Risk Heatmap
+
+The top of the page shows a geographic heatmap with 5 monitored regions:
+
+| Region | Coverage |
+|--------|----------|
+| Middle East | Oil/energy conflicts, regional tensions |
+| US/China | Trade wars, sanctions, tech restrictions |
+| Europe | EU policy, energy security, political shifts |
+| Russia/Ukraine | Conflict, sanctions, energy supply |
+| Asia Pacific | Regional tensions, natural disasters, trade |
+
+Each region card shows:
+- **Risk Score** — a colour-coded bar from green (low) to red (extreme)
+- **Event Count** — how many active events are tracked for this region
+- **Dominant Event Type** — the most significant type of event currently active
+- **Trending** — whether risk is rising, falling, or stable
+
+### Event Analytics
+
+A summary panel showing:
+- Total active geopolitical events
+- Average severity (%) across all events
+- Average confidence (%) of event classifications
+- Event type distribution (top 8 types shown as badges with counts)
+
+### Asset Impact Grid
+
+The core of the dashboard — tabbed by asset class (Crypto, Equities, Forex, Commodities). For each common asset in the selected class, a card shows:
+
+| Field | What It Shows |
+|-------|---------------|
+| **Risk Gauge** | Circular progress bar showing geo risk score as a percentage |
+| **Opportunity Gauge** | Circular progress bar showing potential upside from events |
+| **Net Signal** | −100% (bearish) to +100% (bullish) — risk vs opportunity balance |
+| **Position Size Modifier** | How much the system adjusts position size (e.g. 70% = reduce by 30%) |
+| **Signal Strength** | Weak / Moderate / Strong / Extreme badge |
+| **Recommended Action** | Reduce Exposure / Hedge / Hold / Increase Exposure |
+| **Dominant Events** | The top 2 event types driving the score |
+
+### Risk Timeline
+
+A 7-day bar chart showing hourly-bucketed risk scores. Each bar is colour-coded from green (low risk) to red (high risk). Hover over any bar to see the exact timestamp, risk percentage, and event count for that hour.
+
+### Active Events Feed
+
+A live table of the latest 25 geopolitical events with:
+- **Time** — when the event was detected
+- **Type** — colour-coded badge (e.g. MILITARY_CONFLICT in red, SANCTIONS in orange)
+- **Title** — headline summary of the event
+- **Severity** — how severe the event is (0–100%)
+- **Confidence** — how confident the classifier is (0–100%)
+- **Regions** — which geographic regions are affected
+- **Source** — GDELT or RSS feed origin
+
+### Event Evaluator
+
+A manual classification tool on the right side of the page. Enter an event title and optional description, click **Classify Event**, and the system returns:
+- Detected event type and any secondary types
+- Severity and confidence scores
+- Affected geographic regions
+
+This is useful for testing "what if" scenarios — for example, entering "OPEC announces emergency production cut" to see how the system would classify and score it.
+
+### How It Connects to Trading
+
+The Geo Risk module feeds directly into the **Trust Score** system:
+- The GeoMonitor continuously evaluates overall geopolitical risk levels
+- This feeds into the **News Safety** component of the Execution Trust Scorer
+- When geo risk is elevated, the Trust Score drops, which can reduce position sizes or block trades entirely
+- High-risk events (score ≥ 0.8) can trigger near-blocks on trading activity
+
+You don't need to monitor this page manually — the Auto-Trader automatically incorporates geopolitical risk into every trading decision via the trust score pipeline.
+
+---
+
+## 16. Trust Score
 
 **Path:** `/trust-score` | **Icon:** Shield
 
@@ -1202,7 +1285,7 @@ The Analytics tab answers the question: **do high-trust trades actually perform 
 
 ---
 
-## 16. UK Tax Information
+## 17. UK Tax Information
 
 This section covers the UK tax treatment of trading through AlgoTrader. **This is not financial or tax advice — consult a qualified accountant for your specific situation.**
 
@@ -1251,7 +1334,7 @@ The **Tax Efficiency Router** on the Spread Betting page automatically recommend
 
 ---
 
-## 17. Deployment Guide
+## 18. Deployment Guide
 
 ### Local Development Setup
 
@@ -1383,7 +1466,7 @@ docker push <ecr-uri>:latest
 
 ---
 
-## 18. FAQ
+## 19. FAQ
 
 **Q: Is my money safe in paper trading mode?**
 A: Yes — paper trading is entirely simulated. No real funds leave your account. The default $10,000 is virtual money and cannot be withdrawn.
@@ -1423,7 +1506,7 @@ A: Both are supported. Paper trading is the default for safety. To switch to liv
 
 ---
 
-## 19. Glossary
+## 20. Glossary
 
 | Term | Definition |
 |------|-----------|

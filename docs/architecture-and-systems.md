@@ -24,7 +24,7 @@
 
 ## 1. System Overview
 
-AlgoTrader is a full-stack autonomous trading platform built for retail traders who want algorithmic execution with real-time intelligence. The system combines quantitative strategies with AI-powered decision-making across 18 exchanges, 5 asset classes, and 16 trading strategies.
+AlgoTrader is a full-stack autonomous trading platform built for retail traders who want algorithmic execution with real-time intelligence. The system combines quantitative strategies with AI-powered decision-making and geopolitical risk analysis across 18 exchanges, 5 asset classes, and 16 trading strategies.
 
 ### Technology Stack
 
@@ -52,11 +52,11 @@ AlgoTrader is a full-stack autonomous trading platform built for retail traders 
 | Frontend TypeScript/React LOC | ~21,350 |
 | Exchanges supported | 18 |
 | Trading strategies | 16 |
-| Intelligence/analysis modules | 35 |
-| Frontend pages | 16 |
-| API routers | 15 |
-| API endpoints | ~84 |
-| Test cases | 1,416 |
+| Intelligence/analysis modules | 42 |
+| Frontend pages | 17 |
+| API routers | 16 |
+| API endpoints | ~97 |
+| Test cases | 1,585 |
 | Test pass rate | 100% |
 
 ### Deployment Targets
@@ -78,10 +78,10 @@ AlgoTrader is a full-stack autonomous trading platform built for retail traders 
 │  │   FRONTEND (React)   │  HTTP   │     FASTAPI BACKEND          │  │
 │  │                      │ ──────► │                              │  │
 │  │  React 18 + Vite     │  WS     │  main.py                     │  │
-│  │  TypeScript          │ ◄────── │    ├── 15 API Routers        │  │
+│  │  TypeScript          │ ◄────── │    ├── 16 API Routers        │  │
 │  │  Tailwind + shadcn   │         │    ├── WebSocket endpoint     │  │
 │  │  TanStack Query      │         │    └── Lifespan events        │  │
-│  │  16 Pages            │         │                              │  │
+│  │  17 Pages            │         │                              │  │
 │  └──────────────────────┘         └──────────┬───────────────────┘  │
 │                                              │                      │
 │                         ┌────────────────────┼─────────────────┐    │
@@ -133,12 +133,12 @@ JSON Response (or WebSocket message)
 
 The backend starts from `backend/app/main.py`, which:
 1. Creates the FastAPI application instance
-2. Registers all 15 API routers with their URL prefixes
+2. Registers all 16 API routers with their URL prefixes
 3. Configures CORS for the frontend (Vite dev server + production)
 4. Opens a WebSocket endpoint at `/ws/prices`
 5. Initialises the database on startup via lifespan context
 
-### 15 API Routers
+### 16 API Routers
 
 | Router Module | URL Prefix | Approximate Endpoints | Purpose |
 |--------------|------------|----------------------|---------|
@@ -157,8 +157,9 @@ The backend starts from `backend/app/main.py`, which:
 | `spread_betting` | `/api/spread-betting` | 6 | SB sizing, margin, funding |
 | `smart_trading` | `/api/smart-trading` | 5 | Asset classification, validation |
 | `trust_score` | `/api/trust-score` | 5 | Execution trust scoring, venue quality, history |
+| `geo_risk` | `/api/v1/geo-risk` | 13 | Geopolitical risk scores, events, heatmap, impact matrix, alerts |
 
-**Total: ~84 endpoints**
+**Total: ~97 endpoints**
 
 ### Async Architecture
 
@@ -201,6 +202,14 @@ app/
 │   ├── spread_betting.py       # 7 SB components (1,011 lines)
 │   ├── asset_trading_rules.py  # 5 asset rules engines (920 lines)
 │   ├── execution_trust.py      # Execution trust scorer (3 components)
+│   ├── geo_risk/               # Geopolitical risk intelligence (7 modules)
+│   │   ├── config.py           # Thresholds, polling intervals, amplifiers
+│   │   ├── models.py           # GeoEvent, AssetRiskScore, GeoAlert dataclasses
+│   │   ├── classifier.py       # 14-type keyword event classification
+│   │   ├── impact_matrix.py    # 14×4 event-type-to-asset-class impact profiles
+│   │   ├── scorer.py           # Composite risk scoring with recency decay
+│   │   ├── ingester.py         # GDELT DOC 2.0 + RSS feed ingestion
+│   │   └── monitor.py          # Central orchestrator + query interface
 │   ├── paper_trading.py        # Simulated order execution (508 lines)
 │   ├── position_manager.py     # Stop/TP/trailing management
 │   └── alerting.py             # 4-plugin alert system
@@ -798,6 +807,120 @@ The trust scorer runs as Step 9A in the 10-step pipeline — after all individua
 
 ---
 
+## Geopolitical Risk & Sentiment Intelligence
+
+The Geopolitical Risk module monitors global news and events in real time, classifying them into 14 event types, scoring their impact across 4 asset classes, and feeding risk levels into the Execution Trust Layer's News Safety component.
+
+### Architecture
+
+```
+GDELT DOC 2.0 API ──┐
+(15-min polling)     │
+                     ├──→ GeoNewsIngester ──→ GeoEventClassifier ──→ GeoMonitor
+RSS Feeds (3) ───────┘    (fetch + cache)     (14-type classify)     (orchestrator)
+(5-min polling)                                                          │
+                                                                         ├──→ ImpactMatrix (14×4 profiles)
+                                                                         ├──→ GeoRiskScorer (composite scoring)
+                                                                         ├──→ AssetImpactScorer (per-asset)
+                                                                         ├──→ GeoAlert (user-configured)
+                                                                         └──→ ExecutionTrustScorer (news_safety)
+```
+
+### Event Classification (14 Types)
+
+| # | Event Type | Half-Life | Example |
+|---|-----------|-----------|---------|
+| 1 | MILITARY_CONFLICT | 24h (acute) | Armed conflict, invasion, airstrikes |
+| 2 | TERRORISM | 24h (acute) | Terror attack, bombing, hostage |
+| 3 | SANCTIONS | 168h (structural) | Trade sanctions, asset freeze, embargo |
+| 4 | TRADE_WAR | 168h (structural) | Tariffs, trade dispute, export ban |
+| 5 | ELECTION | 168h (structural) | Presidential election, referendum, coup |
+| 6 | CIVIL_UNREST | 24h (acute) | Protests, riots, revolution |
+| 7 | DIPLOMATIC_CRISIS | 168h (structural) | Embassy closure, diplomatic expulsion |
+| 8 | NATURAL_DISASTER | 24h (acute) | Earthquake, hurricane, flooding |
+| 9 | REGULATORY_CHANGE | 168h (structural) | New regulation, policy shift, ban |
+| 10 | ENERGY_CRISIS | 168h (structural) | Oil embargo, pipeline disruption |
+| 11 | CYBER_ATTACK | 24h (acute) | State-sponsored hack, infrastructure attack |
+| 12 | REPUTATION_EVENT | 168h (structural) | Corporate scandal, credit downgrade |
+| 13 | COMMODITY_DISRUPTION | 168h (structural) | Supply chain break, harvest failure |
+| 14 | CURRENCY_CRISIS | 168h (structural) | Currency collapse, capital controls |
+
+Classification uses weighted keyword dictionaries (10–30+ keywords per type) with geographic region detection across 5 regions: Middle East, US/China, Europe, Russia/Ukraine, Asia Pacific.
+
+### Impact Matrix
+
+The impact matrix maps each of the 14 event types to 4 asset classes (equities, crypto, forex, commodities) with direction (bearish/bullish/neutral), magnitude (0–1), affected sectors, safe havens, and risk currencies.
+
+**Example impact profiles:**
+
+| Event Type | Equities | Crypto | Commodities |
+|-----------|----------|--------|-------------|
+| MILITARY_CONFLICT | Bearish (0.8) | Bullish (0.5) | Bullish (0.9) |
+| SANCTIONS | Bearish (0.6) | Bullish (0.4) | Bullish (0.7) |
+| ENERGY_CRISIS | Bearish (0.7) | Bearish (0.4) | Bullish (0.9) |
+
+### Scoring Pipeline
+
+```
+GeoEvent (classified) ──→ AssetImpactScorer
+                              │
+                              ├── Recency decay: exponential with event-type half-life
+                              ├── Geographic amplifier: 1.2×–1.8× for key region/asset pairs
+                              └── Confidence weighting: event classifier confidence
+                              │
+                              ▼
+                         GeoRiskScorer
+                              │
+                              ├── geo_risk_score (0–1): aggregated downside risk
+                              ├── geo_opportunity_score (0–1): aggregated upside potential
+                              ├── net_signal (−1 to +1): risk vs opportunity balance
+                              ├── signal_strength: weak/moderate/strong/extreme
+                              ├── recommended_action: reduce_exposure/hedge/hold/increase_exposure
+                              └── position_size_modifier: 0.2×–1.2×
+```
+
+### Trust Layer Integration
+
+The GeoMonitor's `get_news_risk_level()` method feeds directly into the ExecutionTrustScorer's News Safety component:
+
+| GeoRisk Level | News Safety Score | Trading Impact |
+|--------------|-------------------|----------------|
+| none | 1.0 | Full confidence |
+| low | 0.8 | Slight reduction |
+| medium | 0.5 | Significant caution |
+| high | 0.1 | Near-block |
+
+News Safety is weighted at 10% for crypto/forex/stocks/indices, 12% for commodities in the trust score calculation.
+
+### API Endpoints (13)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/v1/geo-risk/score/{asset_symbol}` | Geo risk score for single asset |
+| GET | `/api/v1/geo-risk/scores` | Scores for common assets by class |
+| GET | `/api/v1/geo-risk/events` | List active geopolitical events |
+| GET | `/api/v1/geo-risk/events/{event_id}` | Single event detail with impact breakdown |
+| GET | `/api/v1/geo-risk/timeline` | Hourly-bucketed risk score timeline |
+| GET | `/api/v1/geo-risk/heatmap` | Geographic risk heatmap by region |
+| POST | `/api/v1/geo-risk/evaluate` | Manual event classification |
+| GET | `/api/v1/geo-risk/impact-matrix` | Full 14×4 impact matrix |
+| PUT | `/api/v1/geo-risk/impact-matrix` | Update impact matrix weights at runtime |
+| GET | `/api/v1/geo-risk/alerts` | List configured geo alerts |
+| POST | `/api/v1/geo-risk/alerts` | Create geo risk alert |
+| GET | `/api/v1/geo-risk/analytics` | Module analytics and status |
+| GET | `/api/v1/geo-risk/status` | Internal service health |
+
+### Data Sources
+
+| Source | Type | Poll Interval | Cost |
+|--------|------|--------------|------|
+| GDELT DOC 2.0 API | Global event database | 15 minutes | Free (no API key) |
+| Reuters RSS | Breaking financial news | 5 minutes | Free |
+| BBC RSS | Global news coverage | 5 minutes | Free |
+| Al Jazeera RSS | Middle East and global news | 5 minutes | Free |
+
+---
+
 ## 8. Data Pipeline
 
 ### Signal Sources
@@ -899,7 +1022,7 @@ All exchange API calls are rate-limited using CCXT's built-in `enableRateLimit=T
 | TradingView Widget | Candlestick chart (embedded) |
 | Lucide React | Icon system |
 
-### 16 Frontend Pages
+### 17 Frontend Pages
 
 | # | Path | Label | Description |
 |---|------|-------|-------------|
@@ -917,8 +1040,9 @@ All exchange API calls are rate-limited using CCXT's built-in `enableRateLimit=T
 | 12 | `/system-alerts` | System Alerts | System-level failure monitoring with unread badge |
 | 13 | `/spread-betting` | Spread Betting | SB calculator, margin monitor, funding costs |
 | 14 | `/settings` | Settings | API keys, appearance, AI config, portfolio reset |
-| 15 | `/trust-score` | Trust Score | Execution confidence scoring with component breakdown and venue quality |
-| 16 | *(404 / other)* | Not Found | Fallback route |
+| 15 | `/geo-risk` | Geo Risk | Geopolitical risk heatmap, event feed, asset impact scores, timeline |
+| 16 | `/trust-score` | Trust Score | Execution confidence scoring with component breakdown and venue quality |
+| 17 | *(404 / other)* | Not Found | Fallback route |
 
 ### Real-Time WebSocket Feed
 
@@ -975,14 +1099,18 @@ Full fee table sourced from `backend/app/services/paper_trading.py`:
 
 | Suite | File | Tests | Focus |
 |-------|------|-------|-------|
-| Complete | `test_complete.py` | 331 | All ~84 API endpoints — request/response validation |
+| Complete | `test_complete.py` | 331 | All ~97 API endpoints — request/response validation |
 | Integration | `test_integration.py` | 580 | Intelligence modules, strategy logic, execution trust, end-to-end flows |
 | Asset Trading | `test_asset_trading.py` | 505 | Per-asset full pipeline: classify → validate → execute |
-| **Total** | | **1,416** | **100% pass rate** |
+| Geo Risk Classifier | `test_geo_risk_classifier.py` | 18 | Event classification, region detection, severity scoring |
+| Geo Risk Scorer | `test_geo_risk_scorer.py` | 37 | Impact matrix, recency decay, geographic amplification, composite scoring |
+| Geo Risk Ingester | `test_geo_risk_ingester.py` | 20 | GDELT parsing, RSS fetching, caching, date handling |
+| Geo Risk Integration | `test_geo_risk_integration.py` | 94 | Full pipeline, API endpoints, trust layer integration, all 14 event types |
+| **Total** | | **1,585** | **100% pass rate** |
 
 ### test_complete.py (331 tests)
 
-Tests every API endpoint with:
+Tests every core API endpoint with:
 - Valid request → 200 response with expected schema
 - Invalid request → 422 Unprocessable Entity
 - Missing auth → 401 Unauthorized

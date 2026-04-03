@@ -46,7 +46,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 
 ## What It Does
 
-- **Trades autonomously** using a 10-step decision pipeline with 35 intelligence modules and execution trust scoring
+- **Trades autonomously** using a 10-step decision pipeline with 42 intelligence modules and execution trust scoring
 - **Adapts per asset class** — different strategies, risk parameters, and data sources for crypto vs forex vs stocks vs indices vs commodities
 - **Spread betting engine** with £/point sizing, FCA margin rates, gap protection, guaranteed stops, and tax-free routing
 - **Self-improving** — learns from every trade, adjusts strategy weights, optimises parameters, tracks AI accuracy
@@ -78,7 +78,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 
 **Spread Betting (5):** SB Trend Rider, SB Mean Reversion, SB Momentum Scalper, SB Breakout (Guaranteed Stop), SB Index Surfer
 
-## Intelligence (35 modules)
+## Intelligence (42 modules)
 
 | Subsystem | Modules |
 |---|---|
@@ -88,6 +88,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 | AI Decision Layer | News Impact Assessment, Smart Exit Reasoning, Loss Pattern Analysis, AI Strategy Selection |
 | Asset Trading Rules | Crypto Rules, Forex Rules, Stock Rules, Index Rules, Commodity Rules |
 | Spread Betting Engine | Position Sizer (£/pt), Margin Monitor, Overnight Funding, Spread Monitor, Market Hours, Gap Protection, Tax Router |
+| Geopolitical Risk & Sentiment | Event Classifier (14 types), Impact Matrix, Risk Scorer, Asset Impact Scorer, News Ingester (GDELT + RSS), Geo Monitor, Alert Manager |
 | Continuous Improver | Regime-Specific Optimisation, Parameter Mutation, Live+Backtest Blending |
 | Self-Optimizer | Grid-Search Backtesting, Trade Journal Analysis, Strategy Ranking |
 | Execution Trust | Execution Trust Scorer, Venue Quality Tracker, Trust Score History |
@@ -148,9 +149,15 @@ python test_integration.py
 
 # Per-asset trading logic (505 tests)
 python test_asset_trading.py
+
+# Geopolitical risk module (169 tests across 4 files)
+python test_geo_risk_classifier.py
+python test_geo_risk_scorer.py
+python test_geo_risk_ingester.py
+python test_geo_risk_integration.py
 ```
 
-**1,416 total tests, 100% pass rate.**
+**1,585 total tests, 100% pass rate.**
 
 ## Project Structure
 
@@ -158,7 +165,7 @@ python test_asset_trading.py
 algo-trader/
 ├── backend/
 │   ├── app/
-│   │   ├── api/                  # 15 API routers (84 endpoints)
+│   │   ├── api/                  # 16 API routers (97 endpoints)
 │   │   ├── core/                 # Config, database
 │   │   ├── exchanges/
 │   │   │   ├── connectors/       # 8 custom exchange connectors
@@ -174,19 +181,22 @@ algo-trader/
 │   │   │   ├── spread_betting.py # 7 SB components
 │   │   │   ├── asset_trading_rules.py # 5 asset-specific engines
 │   │   │   ├── execution_trust.py  # Execution trust scorer
+│   │   │   ├── geo_risk/         # 7 geopolitical risk modules
 │   │   │   ├── paper_trading.py  # Fee-aware paper trading
 │   │   │   ├── live_trading.py   # Live trading bridge
 │   │   │   ├── signals/          # Data feeds, AI engine, regime detector
 │   │   │   └── ...
 │   │   ├── api/
-│   │   │   └── trust_score.py    # Trust scoring API
+│   │   │   ├── trust_score.py    # Trust scoring API
+│   │   │   └── geo_risk.py       # Geopolitical risk API (13 endpoints)
 │   │   └── strategies/           # 16 trading strategies
 │   ├── test_complete.py          # 331 API tests
 │   ├── test_integration.py       # 580 integration tests
-│   └── test_asset_trading.py     # 505 per-asset tests
+│   ├── test_asset_trading.py     # 505 per-asset tests
+│   └── test_geo_risk_*.py        # 169 geo risk tests (4 files)
 ├── frontend/
 │   └── client/src/
-│       ├── pages/                # 16 pages
+│       ├── pages/                # 17 pages
 │       ├── components/           # Layout, UI components
 │       └── hooks/                # WebSocket, toast
 ├── docs/
@@ -198,7 +208,7 @@ algo-trader/
 └── .env.example
 ```
 
-## UI Pages (16)
+## UI Pages (17)
 
 | Page | Purpose |
 |---|---|
@@ -215,6 +225,7 @@ algo-trader/
 | Alerts | Price and condition alerts |
 | System Alerts | Failure monitoring, notification plugins |
 | Spread Betting | £/point calculator, margin, funding, tax router |
+| Geo Risk | Geopolitical risk heatmap, event feed, asset impact scores |
 | Settings | All configuration (exchanges, AI keys, notifications) |
 | Trust Score | Execution confidence scoring with component breakdown |
 
@@ -229,7 +240,7 @@ When trading through IG Group, Capital.com, or CMC Markets as spread bets:
 
 - [Product Requirements](docs/requirements.md) — complete product spec in plain language (1,039 lines)
 - [Architecture & Systems](docs/architecture-and-systems.md) — full technical architecture (1,016 lines)
-- [Intelligence & Self-Improvement](docs/intelligence-and-self-improvement.md) — all 35 modules detailed (1,308 lines)
+- [Intelligence & Self-Improvement](docs/intelligence-and-self-improvement.md) — all 42 modules detailed (1,308 lines)
 - [User Guide](docs/user-guide.md) — complete feature guide (1,402 lines)
 
 ## License

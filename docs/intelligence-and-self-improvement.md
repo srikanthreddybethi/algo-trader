@@ -17,15 +17,16 @@
 9. [Self-Optimizer](#9-self-optimizer)
 10. [Feedback Loop](#10-feedback-loop)
 11. [Alerting System](#11-alerting-system)
-12. [Execution Trust Layer](#12-execution-trust-layer)
+12. [Geopolitical Risk & Sentiment Intelligence](#12-geopolitical-risk--sentiment-intelligence)
+13. [Execution Trust Layer](#13-execution-trust-layer)
 
 ---
 
 ## 1. Intelligence Architecture Overview
 
-AlgoTrader contains **35 intelligence and analysis modules** across **9 subsystems**. Together they form a self-improving system — each module feeds outcomes back into the others, compounding over time.
+AlgoTrader contains **42 intelligence and analysis modules** across **10 subsystems**. Together they form a self-improving system — each module feeds outcomes back into the others, compounding over time.
 
-### The 9 Subsystems
+### The 10 Subsystems
 
 | Subsystem | Source File | Modules | Purpose |
 |-----------|------------|---------|---------|
@@ -35,11 +36,12 @@ AlgoTrader contains **35 intelligence and analysis modules** across **9 subsyste
 | AI Decision Layer | `services/ai_decision_layer.py` | 4 | Claude/Gemini for reasoning tasks |
 | Asset Trading Rules | `services/asset_trading_rules.py` | 5 | Per-asset-class constraints |
 | Spread Betting Engine | `services/spread_betting.py` | 7 | SB-specific sizing and risk |
+| Geopolitical Risk | `services/geo_risk/` | 7 | Real-time geopolitical event monitoring, classification, and impact scoring |
 | Position Manager | `services/position_manager.py` | 3 | Stop/TP/trailing, streak detection |
 | Alerting | `services/alerting.py` | 4 | Multi-channel alert routing |
 | Execution Trust | `services/execution_trust.py` | 3 | Unified trade confidence scoring |
 
-### All 35 Modules at a Glance
+### All 42 Modules at a Glance
 
 | # | Module | Subsystem | Core Function |
 |---|--------|-----------|--------------|
@@ -75,9 +77,16 @@ AlgoTrader contains **35 intelligence and analysis modules** across **9 subsyste
 | 30 | SpreadMonitor | Spread Betting Engine | Bid-ask anomaly detection |
 | 31 | MarketHoursFilter | Spread Betting Engine | Session awareness |
 | 32 | GapProtectionManager | Spread Betting Engine | Weekend/close gap risk |
-| 33 | ExecutionTrustScorer | Execution Trust | Weighted composite scoring across 10 dimensions |
-| 34 | VenueQualityTracker | Execution Trust | Per-exchange execution quality tracking |
-| 35 | TrustScoreHistory | Execution Trust | Records evaluations and correlates with outcomes |
+| 33 | GeoEventClassifier | Geopolitical Risk | 14-type keyword event classification |
+| 34 | GeoImpactMatrix | Geopolitical Risk | 14×4 event-to-asset impact profiles |
+| 35 | GeoRiskScorer | Geopolitical Risk | Composite risk scoring with recency decay |
+| 36 | AssetImpactScorer | Geopolitical Risk | Per-asset risk/opportunity scoring |
+| 37 | GeoNewsIngester | Geopolitical Risk | GDELT + RSS real-time data ingestion |
+| 38 | GeoMonitor | Geopolitical Risk | Central orchestrator and query interface |
+| 39 | GeoAlertManager | Geopolitical Risk | User-configured geopolitical alerts |
+| 40 | ExecutionTrustScorer | Execution Trust | Weighted composite scoring across 10 dimensions |
+| 41 | VenueQualityTracker | Execution Trust | Per-exchange execution quality tracking |
+| 42 | TrustScoreHistory | Execution Trust | Records evaluations and correlates with outcomes |
 
 ---
 
@@ -1310,7 +1319,171 @@ elif condition == "below" and current_price <= target_price:
 
 ---
 
-## 12. Execution Trust Layer
+## 12. Geopolitical Risk & Sentiment Intelligence (7 modules)
+
+Source: `backend/app/services/geo_risk/` (7 files)
+
+The Geopolitical Risk module monitors real-time global news and events, classifies them into 14 event types, scores their impact per asset class, and feeds risk levels into the Execution Trust Layer. It uses free data sources (GDELT DOC 2.0 API + RSS feeds) with zero API costs.
+
+### 12.1 GeoEventClassifier
+
+**File:** `services/geo_risk/classifier.py` → class `GeoEventClassifier`
+
+Fast, deterministic keyword-based geopolitical event classification. Each article is scored against 14 event type keyword dictionaries (10–30+ weighted keywords per type).
+
+**14 event types:**
+
+| Category | Event Types | Half-Life |
+|----------|-----------|-----------|
+| Acute (fast decay) | MILITARY_CONFLICT, TERRORISM, CYBER_ATTACK, NATURAL_DISASTER, CIVIL_UNREST | 24 hours |
+| Structural (slow decay) | SANCTIONS, TRADE_WAR, ELECTION, DIPLOMATIC_CRISIS, REGULATORY_CHANGE, ENERGY_CRISIS, REPUTATION_EVENT, COMMODITY_DISRUPTION, CURRENCY_CRISIS | 168 hours (7 days) |
+
+**Region detection:** 5 geographic regions — Middle East, US/China, Europe, Russia/Ukraine, Asia Pacific.
+
+**Classification output:**
+```python
+{
+    "event_type": "MILITARY_CONFLICT",
+    "secondary_types": ["ENERGY_CRISIS"],
+    "confidence": 0.82,
+    "severity": 0.75,
+    "regions": ["middle_east"],
+    "tone_score": -0.6
+}
+```
+
+**Minimum confidence threshold:** 0.3 — articles below this are discarded.
+
+---
+
+### 12.2 GeoImpactMatrix
+
+**File:** `services/geo_risk/impact_matrix.py`
+
+A 14×4 matrix mapping each event type to its expected impact on equities, crypto, forex, and commodities. Each cell contains direction (bearish/bullish/neutral/varies), magnitude (0–1), affected sectors, safe havens, and risk currencies.
+
+**Sample matrix entries:**
+
+| Event Type | Equities | Crypto | Forex | Commodities |
+|-----------|----------|--------|-------|-------------|
+| MILITARY_CONFLICT | Bearish (0.8) | Bullish (0.5) | Varies | Bullish (0.9) |
+| SANCTIONS | Bearish (0.6) | Bullish (0.4) | Bearish (0.5) | Bullish (0.7) |
+| ENERGY_CRISIS | Bearish (0.7) | Bearish (0.4) | Varies | Bullish (0.9) |
+| NATURAL_DISASTER | Bearish (0.5) | Neutral (0.2) | Varies | Bullish (0.6) |
+| TRADE_WAR | Bearish (0.7) | Bullish (0.4) | Bearish (0.6) | Bullish (0.5) |
+
+The matrix is updatable at runtime via the `PUT /api/v1/geo-risk/impact-matrix` endpoint.
+
+---
+
+### 12.3 GeoRiskScorer & AssetImpactScorer
+
+**File:** `services/geo_risk/scorer.py`
+
+**AssetImpactScorer** maps a single event to per-asset impacts using:
+- **Recency decay:** Exponential decay with half-lives (acute=24h, structural=168h)
+- **Geographic amplifier:** Key region/asset pairs amplified 1.2×–1.8× (e.g., Middle East + commodities_oil = 1.5×, US/China + forex = 1.5×)
+- **Confidence weighting:** Event classifier confidence applied
+
+**GeoRiskScorer** aggregates across all active events for a composite score:
+
+```python
+score = scorer.score_asset("BTC/USDT", "crypto")
+# Returns:
+{
+    "geo_risk_score": 0.45,          # 0–1 aggregated downside risk
+    "geo_opportunity_score": 0.30,   # 0–1 aggregated upside potential
+    "net_signal": -0.15,             # −1 to +1 (negative = net risk)
+    "signal_strength": "moderate",   # weak/moderate/strong/extreme
+    "recommended_action": "hedge",   # reduce_exposure/hedge/hold/increase_exposure
+    "position_size_modifier": 0.7,   # 0.2–1.2×
+    "confidence": 0.65,
+    "dominant_events": ["SANCTIONS", "TRADE_WAR"],
+    "sources_analyzed": 42
+}
+```
+
+**Risk thresholds:** low=0.3, moderate=0.5, high=0.7, extreme=0.85
+
+**Position size modifier:** 0.2× at extreme risk, 1.0× at no risk, up to 1.2× at high opportunity.
+
+---
+
+### 12.4 GeoNewsIngester
+
+**File:** `services/geo_risk/ingester.py` → class `GeoNewsIngester`
+
+Ingests news from two free data sources:
+
+**GDELT DOC 2.0 API** (polled every 15 minutes):
+- Queries across 7 curated geopolitical themes
+- Max 250 records per query
+- Supports article list, timeline tone, and timeline volume modes
+- No API key required
+
+**RSS Feeds** (polled every 5 minutes):
+- Reuters World News
+- BBC World News
+- Al Jazeera
+- Max 50 entries per feed per poll
+
+Both sources are cached with TTLs matching their poll intervals to avoid redundant requests.
+
+---
+
+### 12.5 GeoMonitor
+
+**File:** `services/geo_risk/monitor.py` → class `GeoMonitor`
+
+The central orchestrator that ties all components together. Runs as a background service with async lifecycle management.
+
+**Key responsibilities:**
+- Polls GDELT (every 15min) and RSS (every 5min) via the ingester
+- Classifies all fetched articles via the classifier
+- Maintains a rolling 30-day event window (max 500 events)
+- Exposes query methods for events, scores, timelines, and heatmaps
+- Provides `get_news_risk_level()` for trust layer integration
+- Manages user-configured geo alerts
+
+**Global singleton:** `geo_monitor` instance, available to all services.
+
+---
+
+### 12.6 GeoAlertManager
+
+**File:** `services/geo_risk/monitor.py` (integrated into GeoMonitor)
+
+Users can configure alerts that trigger when geopolitical risk crosses thresholds for specific asset classes or event types.
+
+```python
+alert = {
+    "asset_class": "commodities",
+    "event_types": ["MILITARY_CONFLICT", "ENERGY_CRISIS"],
+    "threshold": 0.7,
+    "description": "Alert on high commodity risk from conflict or energy crisis"
+}
+```
+
+---
+
+### 12.7 Trust Layer Integration
+
+The GeoMonitor feeds directly into the ExecutionTrustScorer's News Safety component via `get_news_risk_level()`:
+
+| Risk Level | News Safety Score | Position Impact |
+|-----------|-------------------|-----------------|
+| `none` | 1.0 | Full confidence |
+| `low` | 0.8 | Minor reduction |
+| `medium` | 0.5 | Significant caution |
+| `high` | 0.1 | Near-block |
+
+The trust scorer's API (`/api/trust-score/evaluate`) checks the geo monitor before every evaluation. When geopolitical risk is elevated, the News Safety component score drops, which lowers the overall trust score and can reduce position size or block trades entirely.
+
+**Config:** Trust layer weight = 10% (news_safety), high risk block threshold = 0.8, opportunity boost threshold = 0.7.
+
+---
+
+## 13. Execution Trust Layer
 
 The Execution Trust Layer is the unified confidence scoring system that replaces fragmented trade gates. It consumes ALL signal sources and produces a single composite trust score.
 

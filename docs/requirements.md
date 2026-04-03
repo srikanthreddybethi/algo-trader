@@ -68,10 +68,10 @@ Manual trading is time-consuming, emotionally driven, and limited by human atten
 | Lines of code | 40,000 |
 | Exchange integrations | 18 |
 | Trading strategies | 16 |
-| Intelligence modules | 35 |
-| UI pages | 16 |
-| API endpoints | 84 |
-| Automated tests | 1,416 |
+| Intelligence modules | 42 |
+| UI pages | 17 |
+| API endpoints | 97 |
+| Automated tests | 1,585 |
 
 ---
 
@@ -252,7 +252,7 @@ These strategies are specifically designed for spread betting instruments (indic
 
 ### 2.4 Intelligence & Self-Learning
 
-The platform includes **35 intelligence modules** that work alongside the trading strategies. These modules don't generate trade signals directly — they assess whether a signal is good enough to act on, how big the position should be, when to exit, and how the system should improve itself.
+The platform includes **42 intelligence modules** that work alongside the trading strategies. These modules don't generate trade signals directly — they assess whether a signal is good enough to act on, how big the position should be, when to exit, and how the system should improve itself.
 
 #### Core Intelligence (6 modules)
 
@@ -364,6 +364,33 @@ These modules combine all signal sources into a single unified confidence score 
 | **Venue tracking** | Must track per-exchange execution quality (fill rate, slippage, success rate) and incorporate it into the trust score |
 | **Outcome correlation** | Must log trust scores alongside trade outcomes and produce analytics showing grade-vs-performance data |
 | **Trust score logging** | Every evaluation must be persisted to the rolling history for auditability and continuous learning |
+
+#### Geopolitical Risk & Sentiment Intelligence (7 modules)
+
+The platform monitors global geopolitical events in real time and scores their impact on trading decisions. This feeds into the Execution Trust Layer's News Safety component.
+
+| Module | What It Does |
+|---|---|
+| **Event Classifier** | Classifies news articles into 14 geopolitical event types (military conflict, sanctions, trade war, election, etc.) using weighted keyword dictionaries. Detects geographic regions and calculates severity/confidence scores |
+| **Impact Matrix** | Maps each of the 14 event types to 4 asset classes (equities, crypto, forex, commodities) with direction (bearish/bullish), magnitude (0–1), and affected sectors |
+| **Risk Scorer** | Aggregates all active events into a composite geo risk score per asset, applying recency decay (24h half-life for acute events, 7-day for structural) and geographic amplification |
+| **Asset Impact Scorer** | Calculates per-asset risk contribution, opportunity contribution, net signal, and recommended position size modifier (0.2×–1.2×) |
+| **News Ingester** | Fetches geopolitical news from GDELT DOC 2.0 API (15-minute polling) and 3 RSS feeds — Reuters, BBC, Al Jazeera (5-minute polling). All free, no API keys required |
+| **Geo Monitor** | Central orchestrator that runs as a background service: polls data sources, classifies events, maintains a rolling 30-day event window (max 500 events), and exposes query APIs |
+| **Alert Manager** | User-configured alerts that trigger when geopolitical risk crosses defined thresholds for specific asset classes or event types |
+
+#### Geopolitical Risk Requirements
+
+| Requirement | Detail |
+|---|---|
+| **14 event types** | Must classify events into: Military Conflict, Terrorism, Sanctions, Trade War, Election, Civil Unrest, Diplomatic Crisis, Natural Disaster, Regulatory Change, Energy Crisis, Cyber Attack, Reputation Event, Commodity Disruption, Currency Crisis |
+| **5 geographic regions** | Must detect and track: Middle East, US/China, Europe, Russia/Ukraine, Asia Pacific |
+| **Free data sources** | Must operate with zero API costs using GDELT DOC 2.0 (no key) and public RSS feeds |
+| **Recency decay** | Acute events (conflict, terrorism, disaster) must decay with 24h half-life; structural events (sanctions, trade war) with 7-day half-life |
+| **Geographic amplification** | Must amplify impact scores for key region/asset pairs (e.g. Middle East events amplified for commodity scoring) |
+| **Trust layer integration** | Must feed geo risk levels (none/low/medium/high) into the Execution Trust Scorer's News Safety component |
+| **Position size adjustment** | Must provide a position size modifier (0.2×–1.2×) based on combined risk and opportunity assessment |
+| **Runtime-updatable matrix** | Impact matrix weights must be updatable at runtime via API without restart |
 
 ---
 
@@ -621,7 +648,7 @@ The platform pulls data from multiple external sources to inform trading decisio
 
 ### 3.1 Pages
 
-The application has **16 pages**. All pages are accessible from the main navigation.
+The application has **17 pages**. All pages are accessible from the main navigation.
 
 ---
 
@@ -825,6 +852,21 @@ Configure every aspect of the platform.
 
 ---
 
+#### Geo Risk
+
+Geopolitical risk intelligence dashboard — monitors real-time global events and their impact on trading.
+
+**User can:**
+- View a geographic risk heatmap across 5 regions (Middle East, US/China, Europe, Russia/Ukraine, Asia Pacific) with risk scores, event counts, and trending indicators
+- See event analytics including total active events, average severity, average confidence, and event type distribution
+- Browse asset impact scores by class (crypto, equities, forex, commodities) with risk gauges, opportunity gauges, net signal, position size modifiers, and recommended actions
+- View a 7-day risk timeline showing hourly-bucketed risk scores as a colour-coded bar chart
+- Browse a live feed of the latest 25 geopolitical events with type, severity, confidence, regions, and source
+- Manually classify events using the Event Evaluator to test "what if" scenarios
+- Understand how geopolitical risk feeds into the Trust Score's News Safety component
+
+---
+
 #### Trust Score
 
 Execution confidence scoring dashboard — shows how confident the system is about any given trade before it is placed.
@@ -890,7 +932,7 @@ Shown when a user navigates to a page that doesn't exist.
 
 The platform exposes a REST API that the frontend uses to communicate with the backend. All data flows through this API.
 
-**Total:** ~84 endpoints across 15 modules.
+**Total:** ~97 endpoints across 16 modules.
 
 | API Module | Endpoint Count | What It Serves |
 |---|---|---|
@@ -908,6 +950,7 @@ The platform exposes a REST API that the frontend uses to communicate with the b
 | **Settings** | ~4 | Read and write all configuration settings |
 | **System** | ~5 | Health check; system status; circuit breaker status; version info |
 | **Market Data** | ~4 | Fetch news; get Fear & Greed data; get economic calendar |
+| **Geo Risk** | ~13 | Geopolitical risk scores per asset; active events; regional heatmap; risk timeline; impact matrix; manual evaluation; alerts; analytics |
 | **Trust Score** | ~5 | Evaluate execution trust for any symbol/direction/exchange; view venue quality scores; trust analytics; weight profiles |
 
 #### API Standards
@@ -922,13 +965,17 @@ The platform exposes a REST API that the frontend uses to communicate with the b
 
 ## 5. Testing Requirements
 
-The platform maintains **1,416 automated tests** across 3 test suites. All tests must pass before any release.
+The platform maintains **1,585 automated tests** across 7 test suites. All tests must pass before any release.
 
 | Suite | File | Tests | What It Covers |
 |---|---|---|---|
-| **API Tests** | `test_complete.py` | 331 | Every API endpoint — request/response validation, schema checks, error handling |
+| **API Tests** | `test_complete.py` | 331 | Every core API endpoint — request/response validation, schema checks, error handling |
 | **Integration Tests** | `test_integration.py` | 580 | Intelligence modules, strategy logic, execution trust layer, orchestrator end-to-end flows |
 | **Asset Trading Tests** | `test_asset_trading.py` | 505 | Per-asset full pipeline: classify → validate → execute, across all 5 asset classes |
+| **Geo Risk Classifier** | `test_geo_risk_classifier.py` | 18 | Event classification across 14 types, region detection, severity scoring, batch processing |
+| **Geo Risk Scorer** | `test_geo_risk_scorer.py` | 37 | Impact matrix completeness, recency decay, geographic amplification, composite scoring |
+| **Geo Risk Ingester** | `test_geo_risk_ingester.py` | 20 | GDELT parsing, RSS fetching, caching, date handling, failure resilience |
+| **Geo Risk Integration** | `test_geo_risk_integration.py` | 94 | Full pipeline, all 13 API endpoints, trust layer integration, all 14 event types |
 
 #### Test Standards
 
@@ -1067,7 +1114,7 @@ The following must be configurable via environment variables (never hard-coded):
 > | Total codebase | 40,000 lines |
 > | Exchanges | 18 |
 > | Strategies | 16 |
-> | Intelligence modules | 35 |
-> | UI pages | 16 |
-> | API endpoints | 84 |
-> | Automated tests | 1,416 |
+> | Intelligence modules | 42 |
+> | UI pages | 17 |
+> | API endpoints | 97 |
+> | Automated tests | 1,585 |
