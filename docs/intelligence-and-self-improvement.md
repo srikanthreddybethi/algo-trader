@@ -1,6 +1,6 @@
 # AlgoTrader — Intelligence & Self-Improvement
 
-> **Last updated:** March 2026 — reflects the live codebase at 38,000 lines of code.
+> **Last updated:** April 2026 — reflects the live codebase at ~40,000 lines of code.
 
 ---
 
@@ -17,14 +17,15 @@
 9. [Self-Optimizer](#9-self-optimizer)
 10. [Feedback Loop](#10-feedback-loop)
 11. [Alerting System](#11-alerting-system)
+12. [Execution Trust Layer](#12-execution-trust-layer)
 
 ---
 
 ## 1. Intelligence Architecture Overview
 
-AlgoTrader contains **32 intelligence and analysis modules** across **8 subsystems**. Together they form a self-improving system — each module feeds outcomes back into the others, compounding over time.
+AlgoTrader contains **35 intelligence and analysis modules** across **9 subsystems**. Together they form a self-improving system — each module feeds outcomes back into the others, compounding over time.
 
-### The 8 Subsystems
+### The 9 Subsystems
 
 | Subsystem | Source File | Modules | Purpose |
 |-----------|------------|---------|---------|
@@ -36,8 +37,9 @@ AlgoTrader contains **32 intelligence and analysis modules** across **8 subsyste
 | Spread Betting Engine | `services/spread_betting.py` | 7 | SB-specific sizing and risk |
 | Position Manager | `services/position_manager.py` | 3 | Stop/TP/trailing, streak detection |
 | Alerting | `services/alerting.py` | 4 | Multi-channel alert routing |
+| Execution Trust | `services/execution_trust.py` | 3 | Unified trade confidence scoring |
 
-### All 32 Modules at a Glance
+### All 35 Modules at a Glance
 
 | # | Module | Subsystem | Core Function |
 |---|--------|-----------|--------------|
@@ -73,6 +75,9 @@ AlgoTrader contains **32 intelligence and analysis modules** across **8 subsyste
 | 30 | SpreadMonitor | Spread Betting Engine | Bid-ask anomaly detection |
 | 31 | MarketHoursFilter | Spread Betting Engine | Session awareness |
 | 32 | GapProtectionManager | Spread Betting Engine | Weekend/close gap risk |
+| 33 | ExecutionTrustScorer | Execution Trust | Weighted composite scoring across 10 dimensions |
+| 34 | VenueQualityTracker | Execution Trust | Per-exchange execution quality tracking |
+| 35 | TrustScoreHistory | Execution Trust | Records evaluations and correlates with outcomes |
 
 ---
 
@@ -1305,4 +1310,51 @@ elif condition == "below" and current_price <= target_price:
 
 ---
 
-*Intelligence document generated from codebase audit — March 2026.*
+## 12. Execution Trust Layer
+
+The Execution Trust Layer is the unified confidence scoring system that replaces fragmented trade gates. It consumes ALL signal sources and produces a single composite trust score.
+
+### ExecutionTrustScorer
+
+The main engine evaluates 10 signal dimensions with asset-specific weight profiles:
+
+1. **Signal Strength** — Direct strategy confidence (0-1)
+2. **Timeframe Agreement** — MTF consensus level (0=none, 0.33=1/3, 0.67=2/3, 1.0=3/3)
+3. **Regime Confidence** — Market regime detection confidence, penalized if direction conflicts
+4. **Sentiment Alignment** — Whether market sentiment supports the trade direction
+5. **Strategy Track Record** — Win rate from scoreboard (neutral 0.5 if <5 trades)
+6. **Spread Quality** — Current spread vs average (1.0=normal, 2.0+=dangerous)
+7. **Data Freshness** — Age of latest OHLCV candle (<60s=1.0, >15min=0.2)
+8. **Venue Quality** — Per-exchange execution quality from VenueQualityTracker
+9. **News Safety** — Proximity and severity of upcoming news events
+10. **Risk Headroom** — Distance from max drawdown limit
+
+### VenueQualityTracker
+
+Tracks per-exchange execution quality over a rolling window of 100 trades:
+- Fill rate (% of orders that execute)
+- Average slippage (expected vs actual fill price)
+- Success rate (% without errors)
+- New exchanges start at 0.7 score until enough data accumulates (5+ trades)
+
+### TrustScoreHistory
+
+Records every trust evaluation and correlates with trade outcomes:
+- Groups results by grade (A/B/C/D/F)
+- Tracks average P&L and win rate per grade
+- Answers: “Do high-trust trades actually perform better?”
+- Max 1000 entries in rolling window
+
+### Asset-Specific Weights
+
+Each asset class has a different weight profile reflecting what matters most:
+- **Crypto**: Sentiment (15%) and news (10%) weighted high — crypto is sentiment-driven
+- **Forex**: MTF agreement (15%) and spread quality (10%) weighted high — technical and cost-sensitive
+- **Stocks**: Track record (15%) and risk headroom (15%) weighted high — capital preservation
+- **Indices**: Regime confidence (15%) weighted high — indices are macro-driven
+- **Commodities**: Sentiment (15%) and news (12%) weighted high — supply/demand/geopolitical
+- **Spread Betting**: Spread quality (12%) and venue quality (8%) elevated — execution costs matter with leverage
+
+---
+
+*Intelligence document generated from codebase audit — April 2026.*

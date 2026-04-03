@@ -2,7 +2,7 @@
 
 > **Version:** 1.0  
 > **Status:** Active  
-> **Last Updated:** March 2026  
+> **Last Updated:** April 2026  
 > **Audience:** Product, Engineering, QA, Stakeholders
 
 ---
@@ -65,13 +65,13 @@ Manual trading is time-consuming, emotionally driven, and limited by human atten
 
 | Metric | Count |
 |---|---|
-| Lines of code | 38,000 |
+| Lines of code | 40,000 |
 | Exchange integrations | 18 |
 | Trading strategies | 16 |
-| Intelligence modules | 32 |
-| UI pages | 15 |
-| API endpoints | 79 |
-| Automated tests | 1,237 |
+| Intelligence modules | 35 |
+| UI pages | 16 |
+| API endpoints | 84 |
+| Automated tests | 1,416 |
 
 ---
 
@@ -252,7 +252,7 @@ These strategies are specifically designed for spread betting instruments (indic
 
 ### 2.4 Intelligence & Self-Learning
 
-The platform includes **32 intelligence modules** that work alongside the trading strategies. These modules don't generate trade signals directly — they assess whether a signal is good enough to act on, how big the position should be, when to exit, and how the system should improve itself.
+The platform includes **35 intelligence modules** that work alongside the trading strategies. These modules don't generate trade signals directly — they assess whether a signal is good enough to act on, how big the position should be, when to exit, and how the system should improve itself.
 
 #### Core Intelligence (6 modules)
 
@@ -343,6 +343,27 @@ These make the system smarter over time:
 | Module | What It Does |
 |---|---|
 | **Alert Manager** | Sends notifications when important events occur (trade placed, loss limit hit, kill switch triggered, etc.) via 4 configurable delivery channels (e.g., email, SMS, webhook, desktop notification) |
+
+#### Execution Trust Layer (3 modules)
+
+These modules combine all signal sources into a single unified confidence score before every trade:
+
+| Module | What It Does |
+|---|---|
+| **Execution Trust Scorer** | Evaluates 10 signal dimensions (signal strength, timeframe agreement, regime confidence, sentiment alignment, strategy track record, spread quality, data freshness, venue quality, news safety, risk headroom) with asset-specific weight profiles and produces a composite score from 0 to 1 |
+| **Venue Quality Tracker** | Records fill rate, slippage, and success rate for each exchange over a rolling 100-trade window; new exchanges start at a neutral 0.7 score until sufficient data accumulates |
+| **Trust Score History** | Stores every trust evaluation and correlates it with the actual trade outcome, answering: "Do high-trust trades perform better?" Keeps a rolling window of 1,000 evaluations |
+
+#### Execution Trust Layer Requirements
+
+| Requirement | Detail |
+|---|---|
+| **Composite scoring** | Must combine all signal inputs into a single trust score (0–1) before each trade |
+| **Asset-specific weights** | Must apply different component weights for each of the 6 asset classes: crypto, forex, stocks, indices, commodities, and spread betting |
+| **Grade-based execution** | Must map scores to grades (A≥ 0.80, B 0.65–0.80, C 0.50–0.65, D 0.35–0.50, F <0.35) and adjust position sizing accordingly (100%/70%/40%/0%/0%) |
+| **Venue tracking** | Must track per-exchange execution quality (fill rate, slippage, success rate) and incorporate it into the trust score |
+| **Outcome correlation** | Must log trust scores alongside trade outcomes and produce analytics showing grade-vs-performance data |
+| **Trust score logging** | Every evaluation must be persisted to the rolling history for auditability and continuous learning |
 
 ---
 
@@ -600,7 +621,7 @@ The platform pulls data from multiple external sources to inform trading decisio
 
 ### 3.1 Pages
 
-The application has **15 pages**. All pages are accessible from the main navigation.
+The application has **16 pages**. All pages are accessible from the main navigation.
 
 ---
 
@@ -804,6 +825,18 @@ Configure every aspect of the platform.
 
 ---
 
+#### Trust Score
+
+Execution confidence scoring dashboard — shows how confident the system is about any given trade before it is placed.
+
+**User can:**
+- Enter a symbol, direction (Buy/Sell), and exchange to evaluate
+- See the overall trust score as a 0–100% gauge and letter grade (A/B/C/D/F)
+- See a breakdown of all 10 contributing signal components with individual scores and weights
+- Switch between asset-class weight profiles (crypto, forex, stocks, indices, commodities, spread betting) to understand what factors are prioritised for each market
+- View per-exchange venue quality scores (fill rate, slippage, success rate) to understand execution reliability
+- See analytics correlating trust grades with actual trade outcomes
+
 #### 404 (Not Found)
 
 Shown when a user navigates to a page that doesn't exist.
@@ -857,7 +890,7 @@ Shown when a user navigates to a page that doesn't exist.
 
 The platform exposes a REST API that the frontend uses to communicate with the backend. All data flows through this API.
 
-**Total:** 79 endpoints across 14 modules.
+**Total:** ~84 endpoints across 15 modules.
 
 | API Module | Endpoint Count | What It Serves |
 |---|---|---|
@@ -875,6 +908,7 @@ The platform exposes a REST API that the frontend uses to communicate with the b
 | **Settings** | ~4 | Read and write all configuration settings |
 | **System** | ~5 | Health check; system status; circuit breaker status; version info |
 | **Market Data** | ~4 | Fetch news; get Fear & Greed data; get economic calendar |
+| **Trust Score** | ~5 | Evaluate execution trust for any symbol/direction/exchange; view venue quality scores; trust analytics; weight profiles |
 
 #### API Standards
 
@@ -888,13 +922,13 @@ The platform exposes a REST API that the frontend uses to communicate with the b
 
 ## 5. Testing Requirements
 
-The platform maintains **1,237 automated tests** across 3 test suites. All tests must pass before any release.
+The platform maintains **1,416 automated tests** across 3 test suites. All tests must pass before any release.
 
-| Suite | Tests | What It Covers |
-|---|---|---|
-| **Unit Tests** | ~600 | Tests individual functions in isolation. Covers: every strategy's signal logic, every intelligence module's calculation, all risk rule evaluations, position sizing formulas, fee calculations, overnight funding calculations, Kelly Criterion maths, and all utility functions |
-| **Integration Tests** | ~400 | Tests how components work together. Covers: exchange adapter → order placement flow; intelligence pipeline end-to-end; auto-trader decision cycle; data feed ingestion; settings persistence; paper trading simulation accuracy |
-| **End-to-End Tests** | ~237 | Tests full user workflows through the API. Covers: complete trade lifecycle (signal → intelligence check → risk check → order → history); backtest run from start to result; optimiser cycle; alert creation and triggering; kill switch behaviour |
+| Suite | File | Tests | What It Covers |
+|---|---|---|---|
+| **API Tests** | `test_complete.py` | 331 | Every API endpoint — request/response validation, schema checks, error handling |
+| **Integration Tests** | `test_integration.py` | 580 | Intelligence modules, strategy logic, execution trust layer, orchestrator end-to-end flows |
+| **Asset Trading Tests** | `test_asset_trading.py` | 505 | Per-asset full pipeline: classify → validate → execute, across all 5 asset classes |
 
 #### Test Standards
 
@@ -1030,10 +1064,10 @@ The following must be configurable via environment variables (never hard-coded):
 > |---|---|
 > | Product | AlgoTrader |
 > | Version | 1.0 |
-> | Total codebase | 38,000 lines |
+> | Total codebase | 40,000 lines |
 > | Exchanges | 18 |
 > | Strategies | 16 |
-> | Intelligence modules | 32 |
-> | UI pages | 15 |
-> | API endpoints | 79 |
-> | Automated tests | 1,237 |
+> | Intelligence modules | 35 |
+> | UI pages | 16 |
+> | API endpoints | 84 |
+> | Automated tests | 1,416 |

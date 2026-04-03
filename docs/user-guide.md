@@ -21,10 +21,11 @@
 12. [Optimizer](#12-optimizer)
 13. [Alerts & System Alerts](#13-alerts--system-alerts)
 14. [Settings](#14-settings)
-15. [UK Tax Information](#15-uk-tax-information)
-16. [Deployment Guide](#16-deployment-guide)
-17. [FAQ](#17-faq)
-18. [Glossary](#18-glossary)
+15. [Trust Score](#15-trust-score)
+16. [UK Tax Information](#16-uk-tax-information)
+17. [Deployment Guide](#17-deployment-guide)
+18. [FAQ](#18-faq)
+19. [Glossary](#19-glossary)
 
 ---
 
@@ -958,7 +959,7 @@ Comprehensive performance tracking for your portfolio.
 
 ### Intelligence Status
 
-Live snapshot of all 32 intelligence modules:
+Live snapshot of all 35 intelligence modules:
 - Current scores per strategy (StrategyScoreboard)
 - Market memory size and recent hit rate
 - AI accuracy % (last 30 predictions)
@@ -1129,7 +1130,79 @@ At the bottom of Settings:
 
 ---
 
-## 15. UK Tax Information
+## 15. Trust Score
+
+**Path:** `/trust-score` | **Icon:** Shield
+
+The Trust Score page shows you how confident the system is about executing any given trade. Instead of multiple independent safety checks blocking trades in isolation, all signal sources are combined into a single composite trust score — giving you a clear, actionable confidence reading before any trade is placed.
+
+### Live Trust Evaluator
+
+Type any symbol (e.g. BTC/USDT, EUR/USD, AAPL), choose a direction (Buy or Sell), and select an exchange. Click **Evaluate** to get an instant trust assessment:
+
+| Output | What It Means |
+|--------|---------------|
+| **Trust Score** | A gauge from 0–100% showing overall execution confidence |
+| **Grade** | A (excellent ≥80%), B (good 65–80%), C (marginal 50–65%), D (skip 35–50%), F (reject <35%) |
+| **Recommendation** | Execute / Reduce Size / Wait / Reject |
+| **Size Modifier** | The fraction of normal position size the system will use (100% for A, 70% for B, 40% for C, 0% for D/F) |
+
+### Component Breakdown
+
+Below the gauge you'll see all 10 signal components that feed into the score, each displayed as a labelled progress bar:
+
+| Component | What It Measures |
+|-----------|------------------|
+| Signal Strength | How confident the underlying strategy signal is (0–1) |
+| Timeframe Agreement | How many of the 15m/1h/4h timeframes agree on direction |
+| Regime Confidence | Whether the detected market regime supports the trade |
+| Sentiment Alignment | Whether market sentiment is pointing in the same direction |
+| Strategy Track Record | The strategy's recent win rate from the live scoreboard |
+| Spread Quality | Current spread vs the average (a wide spread reduces confidence) |
+| Data Freshness | How recently the OHLCV data was last updated |
+| Venue Quality | Historical execution quality for the selected exchange |
+| News Safety | Proximity and severity of upcoming news events |
+| Risk Headroom | How close the portfolio is to its max drawdown limit |
+
+Components are colour-coded: green (>70%) = strong, amber (50–70%) = moderate, red (<50%) = weak. They are sorted by weight so the most impactful factors appear first.
+
+### Weight Profiles
+
+Different asset classes weight the 10 components differently, reflecting what matters most for each market:
+
+- **Crypto** — Sentiment (15%) and news (10%) weighted high, because crypto is heavily sentiment-driven
+- **Forex** — Timeframe agreement (15%) and spread quality (10%) weighted high — technical alignment and cost sensitivity matter most
+- **Stocks** — Strategy track record (15%) and risk headroom (15%) weighted high — capital preservation is the priority
+- **Indices** — Regime confidence (15%) weighted high — indices are macro-driven
+- **Commodities** — Sentiment (15%) and news (12%) weighted high — supply/demand and geopolitical factors dominate
+- **Spread Betting** — Spread quality (12%) and venue quality (8%) elevated — execution costs amplified by leverage
+
+Use the asset-class tabs on the Trust Score page to see the full weight table for any category.
+
+### Venue Quality
+
+The Venue Quality tab shows execution quality scores for all exchanges based on historical trade data:
+
+| Metric | What It Tracks |
+|--------|----------------|
+| Fill Rate | Percentage of orders that executed successfully |
+| Avg Slippage | Average difference between expected and actual fill price |
+| Success Rate | Percentage of trades completed without errors |
+
+New exchanges start at a neutral 0.7 score until at least 5 trades have been recorded. Scores update automatically after every trade.
+
+### Trust Score Analytics
+
+The Analytics tab answers the question: **do high-trust trades actually perform better?**
+
+- Compares average P&L and win rate across each grade (A through F)
+- Shows how trust scores have evolved over time
+- Lets you validate that the scoring system is predictive in your specific trading environment
+- Based on the last 1,000 trust evaluations in the rolling history window
+
+---
+
+## 16. UK Tax Information
 
 This section covers the UK tax treatment of trading through AlgoTrader. **This is not financial or tax advice — consult a qualified accountant for your specific situation.**
 
@@ -1178,7 +1251,7 @@ The **Tax Efficiency Router** on the Spread Betting page automatically recommend
 
 ---
 
-## 16. Deployment Guide
+## 17. Deployment Guide
 
 ### Local Development Setup
 
@@ -1310,7 +1383,7 @@ docker push <ecr-uri>:latest
 
 ---
 
-## 17. FAQ
+## 18. FAQ
 
 **Q: Is my money safe in paper trading mode?**
 A: Yes — paper trading is entirely simulated. No real funds leave your account. The default $10,000 is virtual money and cannot be withdrawn.
@@ -1350,7 +1423,7 @@ A: Both are supported. Paper trading is the default for safety. To switch to liv
 
 ---
 
-## 18. Glossary
+## 19. Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -1399,4 +1472,4 @@ A: Both are supported. Paper trading is the default for safety. To switch to liv
 
 ---
 
-*User guide generated from codebase audit — March 2026. All feature descriptions reflect the live AlgoTrader codebase.*
+*User guide generated from codebase audit — April 2026. All feature descriptions reflect the live AlgoTrader codebase.*

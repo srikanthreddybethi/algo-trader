@@ -1,6 +1,6 @@
 # AlgoTrader — Architecture & Systems
 
-> **Last updated:** March 2026 — reflects the live codebase at 38,000 lines of code.
+> **Last updated:** April 2026 — reflects the live codebase at ~40,000 lines of code.
 
 ---
 
@@ -47,16 +47,16 @@ AlgoTrader is a full-stack autonomous trading platform built for retail traders 
 
 | Metric | Count |
 |--------|-------|
-| Total lines of code | 38,000 |
+| Total lines of code | ~40,000 |
 | Backend Python LOC | 16,650 |
 | Frontend TypeScript/React LOC | ~21,350 |
 | Exchanges supported | 18 |
 | Trading strategies | 16 |
-| Intelligence/analysis modules | 32 |
-| Frontend pages | 15 |
-| API routers | 14 |
-| API endpoints | 79 |
-| Test cases | 1,237 |
+| Intelligence/analysis modules | 35 |
+| Frontend pages | 16 |
+| API routers | 15 |
+| API endpoints | ~84 |
+| Test cases | 1,416 |
 | Test pass rate | 100% |
 
 ### Deployment Targets
@@ -78,10 +78,10 @@ AlgoTrader is a full-stack autonomous trading platform built for retail traders 
 │  │   FRONTEND (React)   │  HTTP   │     FASTAPI BACKEND          │  │
 │  │                      │ ──────► │                              │  │
 │  │  React 18 + Vite     │  WS     │  main.py                     │  │
-│  │  TypeScript          │ ◄────── │    ├── 14 API Routers        │  │
+│  │  TypeScript          │ ◄────── │    ├── 15 API Routers        │  │
 │  │  Tailwind + shadcn   │         │    ├── WebSocket endpoint     │  │
 │  │  TanStack Query      │         │    └── Lifespan events        │  │
-│  │  15 Pages            │         │                              │  │
+│  │  16 Pages            │         │                              │  │
 │  └──────────────────────┘         └──────────┬───────────────────┘  │
 │                                              │                      │
 │                         ┌────────────────────┼─────────────────┐    │
@@ -133,12 +133,12 @@ JSON Response (or WebSocket message)
 
 The backend starts from `backend/app/main.py`, which:
 1. Creates the FastAPI application instance
-2. Registers all 14 API routers with their URL prefixes
+2. Registers all 15 API routers with their URL prefixes
 3. Configures CORS for the frontend (Vite dev server + production)
 4. Opens a WebSocket endpoint at `/ws/prices`
 5. Initialises the database on startup via lifespan context
 
-### 14 API Routers
+### 15 API Routers
 
 | Router Module | URL Prefix | Approximate Endpoints | Purpose |
 |--------------|------------|----------------------|---------|
@@ -156,8 +156,9 @@ The backend starts from `backend/app/main.py`, which:
 | `optimizer` | `/api/optimizer` | 4 | Strategy rankings, run optimizer |
 | `spread_betting` | `/api/spread-betting` | 6 | SB sizing, margin, funding |
 | `smart_trading` | `/api/smart-trading` | 5 | Asset classification, validation |
+| `trust_score` | `/api/trust-score` | 5 | Execution trust scoring, venue quality, history |
 
-**Total: 79 endpoints**
+**Total: ~84 endpoints**
 
 ### Async Architecture
 
@@ -190,7 +191,7 @@ app/
 │   ├── position.py
 │   ├── order.py
 │   └── trade.py
-├── routers/                    # 14 FastAPI routers
+├── routers/                    # 15 FastAPI routers
 ├── services/
 │   ├── orchestrator.py         # 10-step autonomous trading loop (1,081 lines)
 │   ├── intelligence.py         # 5 self-learning modules (632 lines)
@@ -199,6 +200,7 @@ app/
 │   ├── ai_decision_layer.py    # Claude/Gemini integration (370 lines)
 │   ├── spread_betting.py       # 7 SB components (1,011 lines)
 │   ├── asset_trading_rules.py  # 5 asset rules engines (920 lines)
+│   ├── execution_trust.py      # Execution trust scorer (3 components)
 │   ├── paper_trading.py        # Simulated order execution (508 lines)
 │   ├── position_manager.py     # Stop/TP/trailing management
 │   └── alerting.py             # 4-plugin alert system
@@ -546,6 +548,7 @@ The orchestrator (`services/orchestrator.py`) is the autonomous brain. When star
 ║  Step 7  │ Asset-Specific Validation                         ║
 ║  Step 8  │ Strategy Selection (asset-aware + AI + scoreboard)║
 ║  Step 9  │ Intelligence Pipeline (5 pre-trade checks)        ║
+║  Step 9A │ Execution Trust Scoring (composite confidence)     ║
 ║  Step 10 │ Position Sizing + Trade Execution + Feedback Loop ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
@@ -674,6 +677,17 @@ MarketMemory         → Have similar conditions led to losses before?
 
 If any check blocks the trade, the cycle logs an `intelligence_block` decision and moves to the next symbol.
 
+### Step 9A — Execution Trust Scoring
+
+`execution_trust.evaluate(symbol, direction, exchange, context)` aggregates all gathered signal data into a single composite trust score:
+
+```
+All signals → ExecutionTrustScorer → Trust Score (0–1) → Grade → Execute / Wait / Reject
+                                                              → Size Modifier (100% / 70% / 40% / 0%)
+```
+
+The grade determines whether execution proceeds and at what position size. Grades D and F cause the trade to be skipped; the trust score and grade are always logged in the decision log.
+
 ### Step 10 — Position Sizing + Execution + Feedback
 
 **Fee-aware position sizing:**
@@ -711,6 +725,76 @@ adaptive.exit_levels.record_exit(pnl_pct, regime, volatility, hold_hours)
 adaptive.ai_accuracy.record_outcome(prediction, actual)
 adaptive.time_profiler.record_outcome(hour, won)
 ```
+
+---
+
+## Execution Trust Layer
+
+The Execution Trust Layer replaces fragmented trade gates with a unified confidence scoring system. Instead of individual modules independently blocking trades, all signal sources feed into a single composite trust score that determines execution confidence and position sizing.
+
+### Architecture
+
+```
+Strategy Signal ──┐
+MTF Consensus ────┤
+Regime Detector ──┤
+Sentiment ────────┤
+Scoreboard ───────┤──→ ExecutionTrustScorer ──→ Trust Score (0-1) ──→ Grade ──→ Execute/Wait/Reject
+Spread Quality ───┤                                                          ──→ Size Modifier
+Data Freshness ───┤
+Venue Quality ────┤
+News Risk ────────┤
+Risk Headroom ───┘
+```
+
+### Components
+
+| Component | Purpose |
+|---|---|
+| ExecutionTrustScorer | Weighted composite scoring across 10 dimensions with asset-specific weight profiles |
+| VenueQualityTracker | Tracks per-exchange execution quality (fill rate, slippage, success rate) over rolling 100-trade window |
+| TrustScoreHistory | Records trust evaluations and correlates with trade outcomes for learning |
+
+### Asset-Specific Weight Profiles
+
+Different assets need different signal emphasis:
+
+| Component | Crypto | Forex | Stocks | Indices | Commodities | Spread Betting |
+|---|---|---|---|---|---|---|
+| Signal Strength | 15% | 15% | 15% | 12% | 12% | 12% |
+| Timeframe Agreement | 10% | 15% | 10% | 12% | 10% | 10% |
+| Regime Confidence | 15% | 15% | 10% | 15% | 12% | 12% |
+| Sentiment Alignment | 15% | 10% | 10% | 10% | 15% | 10% |
+| Strategy Track Record | 15% | 10% | 15% | 12% | 12% | 12% |
+| Spread Quality | 5% | 10% | 5% | 8% | 8% | 12% |
+| Data Freshness | 5% | 5% | 5% | 6% | 6% | 6% |
+| Venue Quality | 5% | 5% | 5% | 5% | 5% | 8% |
+| News Safety | 10% | 10% | 10% | 10% | 12% | 10% |
+| Risk Headroom | 5% | 5% | 15% | 10% | 8% | 8% |
+
+### Grading System
+
+| Grade | Score | Action | Position Size |
+|---|---|---|---|
+| A | ≥ 0.80 | Execute | 100% |
+| B | 0.65–0.80 | Execute | 70% |
+| C | 0.50–0.65 | Reduce size | 40% |
+| D | 0.35–0.50 | Wait (skip) | 0% |
+| F | < 0.35 | Reject | 0% |
+
+### API Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/trust-score/evaluate` | Evaluate execution trust for a symbol/direction/exchange |
+| `GET /api/trust-score/analytics` | Trust score analytics and grade-outcome correlations |
+| `GET /api/trust-score/venues` | Per-exchange venue quality scores |
+| `GET /api/trust-score/history` | Recent trust score evaluation history |
+| `GET /api/trust-score/weights/{asset_class}` | Weight profile for a given asset class |
+
+### Orchestrator Integration
+
+The trust scorer runs as Step 9A in the 10-step pipeline — after all individual signals are gathered but before position sizing. The venue quality tracker is updated after every trade execution (success or failure) to build a per-exchange quality profile over time.
 
 ---
 
@@ -815,7 +899,7 @@ All exchange API calls are rate-limited using CCXT's built-in `enableRateLimit=T
 | TradingView Widget | Candlestick chart (embedded) |
 | Lucide React | Icon system |
 
-### 15 Frontend Pages
+### 16 Frontend Pages
 
 | # | Path | Label | Description |
 |---|------|-------|-------------|
@@ -833,7 +917,8 @@ All exchange API calls are rate-limited using CCXT's built-in `enableRateLimit=T
 | 12 | `/system-alerts` | System Alerts | System-level failure monitoring with unread badge |
 | 13 | `/spread-betting` | Spread Betting | SB calculator, margin monitor, funding costs |
 | 14 | `/settings` | Settings | API keys, appearance, AI config, portfolio reset |
-| 15 | *(404 / other)* | Not Found | Fallback route |
+| 15 | `/trust-score` | Trust Score | Execution confidence scoring with component breakdown and venue quality |
+| 16 | *(404 / other)* | Not Found | Fallback route |
 
 ### Real-Time WebSocket Feed
 
@@ -890,10 +975,10 @@ Full fee table sourced from `backend/app/services/paper_trading.py`:
 
 | Suite | File | Tests | Focus |
 |-------|------|-------|-------|
-| Complete | `test_complete.py` | 331 | All 79 API endpoints — request/response validation |
-| Integration | `test_integration.py` | 517 | Intelligence modules, strategy logic, end-to-end flows |
-| Asset Trading | `test_asset_trading.py` | 389 | Per-asset full pipeline: classify → validate → execute |
-| **Total** | | **1,237** | **100% pass rate** |
+| Complete | `test_complete.py` | 331 | All ~84 API endpoints — request/response validation |
+| Integration | `test_integration.py` | 580 | Intelligence modules, strategy logic, execution trust, end-to-end flows |
+| Asset Trading | `test_asset_trading.py` | 505 | Per-asset full pipeline: classify → validate → execute |
+| **Total** | | **1,416** | **100% pass rate** |
 
 ### test_complete.py (331 tests)
 
@@ -903,7 +988,7 @@ Tests every API endpoint with:
 - Missing auth → 401 Unauthorized
 - Portfolio state consistency after trades
 
-### test_integration.py (517 tests)
+### test_integration.py (580 tests)
 
 - `StrategyScoreboard`: record outcomes, score calculation, weight adjustment
 - `MultiTimeframeConsensus`: agreement logic, regime override
@@ -914,7 +999,7 @@ Tests every API endpoint with:
 - Full orchestrator cycle in isolation (mocked exchanges)
 - Paper trading engine accuracy
 
-### test_asset_trading.py (389 tests)
+### test_asset_trading.py (505 tests)
 
 Each test runs:
 ```

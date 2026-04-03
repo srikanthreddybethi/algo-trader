@@ -46,7 +46,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 
 ## What It Does
 
-- **Trades autonomously** using a 10-step decision pipeline with 32 intelligence modules
+- **Trades autonomously** using a 10-step decision pipeline with 35 intelligence modules and execution trust scoring
 - **Adapts per asset class** — different strategies, risk parameters, and data sources for crypto vs forex vs stocks vs indices vs commodities
 - **Spread betting engine** with £/point sizing, FCA margin rates, gap protection, guaranteed stops, and tax-free routing
 - **Self-improving** — learns from every trade, adjusts strategy weights, optimises parameters, tracks AI accuracy
@@ -78,7 +78,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 
 **Spread Betting (5):** SB Trend Rider, SB Mean Reversion, SB Momentum Scalper, SB Breakout (Guaranteed Stop), SB Index Surfer
 
-## Intelligence (32 modules)
+## Intelligence (35 modules)
 
 | Subsystem | Modules |
 |---|---|
@@ -90,6 +90,7 @@ Performance metrics, risk overview, daily returns, and portfolio history.
 | Spread Betting Engine | Position Sizer (£/pt), Margin Monitor, Overnight Funding, Spread Monitor, Market Hours, Gap Protection, Tax Router |
 | Continuous Improver | Regime-Specific Optimisation, Parameter Mutation, Live+Backtest Blending |
 | Self-Optimizer | Grid-Search Backtesting, Trade Journal Analysis, Strategy Ranking |
+| Execution Trust | Execution Trust Scorer, Venue Quality Tracker, Trust Score History |
 
 ## Quick Start
 
@@ -142,14 +143,14 @@ cd backend
 # API endpoint tests (331 tests)
 python test_complete.py
 
-# Integration tests — intelligence, strategies, E2E (517 tests)
+# Integration tests — intelligence, strategies, E2E (580 tests)
 python test_integration.py
 
-# Per-asset trading logic (389 tests)
+# Per-asset trading logic (505 tests)
 python test_asset_trading.py
 ```
 
-**1,237 total tests, 100% pass rate.**
+**1,416 total tests, 100% pass rate.**
 
 ## Project Structure
 
@@ -157,7 +158,7 @@ python test_asset_trading.py
 algo-trader/
 ├── backend/
 │   ├── app/
-│   │   ├── api/                  # 14 API routers (79 endpoints)
+│   │   ├── api/                  # 15 API routers (84 endpoints)
 │   │   ├── core/                 # Config, database
 │   │   ├── exchanges/
 │   │   │   ├── connectors/       # 8 custom exchange connectors
@@ -172,17 +173,20 @@ algo-trader/
 │   │   │   ├── ai_decision_layer.py
 │   │   │   ├── spread_betting.py # 7 SB components
 │   │   │   ├── asset_trading_rules.py # 5 asset-specific engines
+│   │   │   ├── execution_trust.py  # Execution trust scorer
 │   │   │   ├── paper_trading.py  # Fee-aware paper trading
 │   │   │   ├── live_trading.py   # Live trading bridge
 │   │   │   ├── signals/          # Data feeds, AI engine, regime detector
 │   │   │   └── ...
+│   │   ├── api/
+│   │   │   └── trust_score.py    # Trust scoring API
 │   │   └── strategies/           # 16 trading strategies
 │   ├── test_complete.py          # 331 API tests
-│   ├── test_integration.py       # 517 integration tests
-│   └── test_asset_trading.py     # 389 per-asset tests
+│   ├── test_integration.py       # 580 integration tests
+│   └── test_asset_trading.py     # 505 per-asset tests
 ├── frontend/
 │   └── client/src/
-│       ├── pages/                # 15 pages
+│       ├── pages/                # 16 pages
 │       ├── components/           # Layout, UI components
 │       └── hooks/                # WebSocket, toast
 ├── docs/
@@ -194,7 +198,7 @@ algo-trader/
 └── .env.example
 ```
 
-## UI Pages (15)
+## UI Pages (16)
 
 | Page | Purpose |
 |---|---|
@@ -212,6 +216,7 @@ algo-trader/
 | System Alerts | Failure monitoring, notification plugins |
 | Spread Betting | £/point calculator, margin, funding, tax router |
 | Settings | All configuration (exchanges, AI keys, notifications) |
+| Trust Score | Execution confidence scoring with component breakdown |
 
 ## UK Tax Advantage
 
@@ -224,7 +229,7 @@ When trading through IG Group, Capital.com, or CMC Markets as spread bets:
 
 - [Product Requirements](docs/requirements.md) — complete product spec in plain language (1,039 lines)
 - [Architecture & Systems](docs/architecture-and-systems.md) — full technical architecture (1,016 lines)
-- [Intelligence & Self-Improvement](docs/intelligence-and-self-improvement.md) — all 32 modules detailed (1,308 lines)
+- [Intelligence & Self-Improvement](docs/intelligence-and-self-improvement.md) — all 35 modules detailed (1,308 lines)
 - [User Guide](docs/user-guide.md) — complete feature guide (1,402 lines)
 
 ## License
